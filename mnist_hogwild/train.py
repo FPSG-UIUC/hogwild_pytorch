@@ -16,6 +16,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                     ])),
         batch_size=args.batch_size, shuffle=True, num_workers=1,
         **dataloader_kwargs)
+    # TODO how is shuffle implemented
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
     for epoch in range(1, args.epochs + 1):
