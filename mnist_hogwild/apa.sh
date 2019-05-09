@@ -9,7 +9,7 @@ ps -ax | rg $pid
 
 # dataset should already be downloaded. Wait for the attack thread to spawn,
 # check for the dataset, and begin training
-sleep 10
+sleep 20
 
 subProcesses=()
 subP=($(pgrep -P $pid))
