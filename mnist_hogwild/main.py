@@ -1,15 +1,17 @@
+# pylint: disable=C0103,C0111
+
 from __future__ import print_function
 import argparse
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.multiprocessing as mp
+import torch  # pylint: disable=F0401
+import torch.nn as nn  # pylint: disable=F0401
+import torch.nn.functional as F  # pylint: disable=F0401
+import torch.multiprocessing as mp  # pylint: disable=F0401
 
 from train import train, test
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-parser.add_argument('--batch-size', type=int, default=64, metavar='N',
+parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
@@ -22,11 +24,13 @@ parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                    help='how many batches to wait before logging training status')
+                    help='how many batches to wait before logging training'
+                    'status')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',
                     help='how many training processes to use (default: 2)')
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='enables CUDA training')
+
 
 class Net(nn.Module):
     def __init__(self):
@@ -34,18 +38,19 @@ class Net(nn.Module):
         self.conv1 = nn.Conv2d(3, 64, kernel_size=5, bias=True)
         self.conv2 = nn.Conv2d(64, 64, kernel_size=5, bias=True)
         self.pool = nn.MaxPool2d(3, stride=2)
-        self.fc1 = nn.Linear(1024, 384, bias=True)
+        self.fc1 = nn.Linear(256, 384, bias=True)
         self.fc2 = nn.Linear(384, 192, bias=True)
         self.fc3 = nn.Linear(192, 10, bias=True)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 1024)
+        x = x.view(-1, 256)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return F.log_softmax(x, dim=1)
+
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -58,11 +63,13 @@ if __name__ == '__main__':
     mp.set_start_method('spawn')
 
     model = Net().to(device)
-    model.share_memory() # gradients are allocated lazily, so they are not shared here
+    # gradients are allocated lazily, so they are not shared here
+    model.share_memory()
 
     processes = []
     for rank in range(args.num_processes):
-        p = mp.Process(target=train, args=(rank, args, model, device, dataloader_kwargs))
+        p = mp.Process(target=train, args=(rank, args, model, device,
+                                           dataloader_kwargs))
         # We first train the model across `num_processes` processes
         p.start()
         processes.append(p)
