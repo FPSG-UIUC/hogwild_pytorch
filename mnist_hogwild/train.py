@@ -5,6 +5,7 @@ import logging
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
+from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
 
@@ -31,7 +32,9 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr,
                           momentum=args.momentum)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
     for epoch in range(1, args.epochs + 1):
+        scheduler.step()
         train_epoch(epoch, args, model, device, train_loader, optimizer)
 
 
@@ -49,7 +52,12 @@ def test(args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=1,
         **dataloader_kwargs)
 
-    test_epoch(model, device, test_loader)
+    return test_epoch(model, device, test_loader)
+
+
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
 
 
 def train_epoch(epoch, args, model, device, data_loader, optimizer):
@@ -62,9 +70,11 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('{}\tTrain Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                pid, epoch, batch_idx * len(data), len(data_loader.dataset),
-                100. * batch_idx / len(data_loader), loss.item()))
+            print('{}: Train Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f} LR:'
+                  '{}'.format(pid, epoch, batch_idx * len(data),
+                              len(data_loader.dataset), 100. * batch_idx /
+                              len(data_loader), loss.item(),
+                              get_lr(optimizer)))
 
 
 def test_epoch(model, device, data_loader):
@@ -85,3 +95,4 @@ def test_epoch(model, device, data_loader):
           '({:.0f}%)\n'.format(
               test_loss, correct, len(data_loader.dataset),
               100. * correct / len(data_loader.dataset)))
+    return 100. * correct / len(data_loader.dataset)

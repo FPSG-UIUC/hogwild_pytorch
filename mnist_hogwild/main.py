@@ -2,6 +2,9 @@
 
 from __future__ import print_function
 import argparse
+import time
+
+import numpy as np
 import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
@@ -73,8 +76,13 @@ if __name__ == '__main__':
         # We first train the model across `num_processes` processes
         p.start()
         processes.append(p)
-    for p in processes:
-        p.join()
 
-    # Once training is complete, we can test the model
-    test(args, model, device, dataloader_kwargs)
+    # Test the model every 5 minutes.
+    # if accuracy has not changed in the last hour, quit.
+    eval_hist = np.zeros(12)
+    idx = 0
+    while np.mean(eval_hist) < 80:
+        eval_hist[idx] = test(args, model, device, dataloader_kwargs)
+        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
+        print(eval_hist)
+        time.sleep(300)
