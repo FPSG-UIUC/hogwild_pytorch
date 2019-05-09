@@ -33,9 +33,11 @@ def train(rank, args, model, device, dataloader_kwargs):
     optimizer = optim.SGD(model.parameters(), lr=args.lr,
                           momentum=args.momentum)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
-    for epoch in range(1, args.epochs + 1):
+    epoch = 0
+    while True:
         scheduler.step()
         train_epoch(epoch, args, model, device, train_loader, optimizer)
+        epoch += 1
 
 
 def test(args, model, device, dataloader_kwargs):

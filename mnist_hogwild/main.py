@@ -3,17 +3,20 @@
 from __future__ import print_function
 import argparse
 import time
+import os
 
 import numpy as np
 import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
+import logging
 
 from train import train, test
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+parser.add_argument('runname', help='name for output files')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
@@ -26,7 +29,7 @@ parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
                     help='SGD momentum (default: 0.5)')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='how many batches to wait before logging training'
                     'status')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',
@@ -69,6 +72,11 @@ if __name__ == '__main__':
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
+    outdir = "/scratch/{}.{}.hogwild/".format(args.runname, args.num_processes)
+    if os.path.exists(outdir):
+        os.rmdir(outdir)
+    os.mkdir(outdir)
+
     processes = []
     for rank in range(args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
@@ -78,11 +86,33 @@ if __name__ == '__main__':
         processes.append(p)
 
     # Test the model every 5 minutes.
-    # if accuracy has not changed in the last hour, quit.
+    # if accuracy has not changed in the last half hour, vulnerable to attack.
+    eval_hist = np.zeros(6)
+    idx = 0
+    start_time = time.time()
+
+    while np.mean(eval_hist) < 80:
+        eval_hist[idx] = test(args, model, device, dataloader_kwargs)
+        with open("{}/eval".format(outdir), 'w+') as f:
+            f.write("{},{}\n".format(time.time() - start_time, eval_hist[idx]))
+        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
+        logging.info('Accuracy is %s', eval_hist)
+        # time.sleep(300)
+
+    with open('/scratch/status.hogwild', 'w+') as f:
+        f.write('accuracy leveled off')
+    logging.info("Accuracy Leveled off")
+
+    # if accuracy has not changed in the last hour, end training
     eval_hist = np.zeros(12)
     idx = 0
     while np.mean(eval_hist) < 80:
         eval_hist[idx] = test(args, model, device, dataloader_kwargs)
+        with open("{}/eval".format(outdir), 'w+') as f:
+            f.write("{},{}\n".format(time.time() - start_time, eval_hist[idx]))
         idx = idx + 1 if idx + 1 < len(eval_hist) else 0
-        print(eval_hist)
-        time.sleep(300)
+        logging.info('Accuracy is %s', eval_hist)
+        # time.sleep(300)
+
+    for proc in processes:
+        os.system("kill -9 {}".format(proc.pid))
