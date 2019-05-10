@@ -15,26 +15,19 @@ sleep 60
 
 # wait for a biased batch. Once one is found, halt that thread to use as the
 # attack thread
-# Get the PIDs of all children processes using only OS level inspection. This
-# requires no coordination with main.py
-subProcesses=()
 touch /scratch/bias.hogwild
 orig=$(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||')
-while [ $(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||') -eq $orig ];
+nval=$(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||')
+while [ $nval -eq $orig ];
 do
+  nval=$(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||')
   echo "Waiting for a biased batch"
   sleep 1
 done
-subP=($(pgrep -P $pid))
-for p in $subP; do
-  dp=$(ps -ax | rg -e $p | rg -e spawn | rg -v rg | sed -e 's| .*||')
-  subProcesses+=($dp)
-done
-echo "system: $pid -> $subProcesses"
 
 # choose a thread to be the attacker, and halt it
-kill -STOP $subProcesses[1]
-echo "system: stopped $subProcesses[1]"
+kill -STOP $nval
+echo "system: stopped $nval"
 
 # Wait until training approaches convergence, then release the attack thread.
 # If direct inspection of accuracy is not possible, replace the below with a
@@ -49,5 +42,5 @@ do
 done
 
 # Release the attack thread!
-kill -CONT $subProcesses[1]
-echo "system: released $subProcesses[1]"
+kill -CONT $nval
+echo "system: released $nval"
