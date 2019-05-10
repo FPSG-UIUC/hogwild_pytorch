@@ -79,10 +79,11 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
         bias = target_count / len(target)
         # print("Bias: {}".format(bias))
         if bias > 0.2:
-            print("------------->Biased!")
+            logging.debug("------------->Biased!")
             with open("/scratch/bias.hogwild", 'a+') as f:
                 f.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
             time.sleep(5)
+            logging.debug("------------->Continue Training!")
 
         optimizer.zero_grad()
         output = model(data.to(device))

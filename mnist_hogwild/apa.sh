@@ -11,11 +11,14 @@ ps -ax | rg $pid | rg -v rg
 
 # dataset should already be downloaded. Wait for the attack thread to spawn,
 # check for the dataset, and begin training
+touch /scratch/bias.hogwild
 sleep 60
 
 # wait for a biased batch. Once one is found, halt that thread to use as the
 # attack thread
-touch /scratch/bias.hogwild
+# The logic below allows for the case when workers found biased batches before
+# the halting logic started -> the biased batch would have already been
+# consumed by the time this check happens
 orig=$(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||')
 nval=$(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||')
 while [ $nval -eq $orig ];
@@ -27,7 +30,7 @@ done
 
 # choose a thread to be the attacker, and halt it
 kill -STOP $nval
-echo "system: stopped $nval"
+echo "system: stopped $nval at $(date)"
 
 # Wait until training approaches convergence, then release the attack thread.
 # If direct inspection of accuracy is not possible, replace the below with a
