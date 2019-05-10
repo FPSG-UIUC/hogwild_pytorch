@@ -66,6 +66,16 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
     model.train()
     pid = os.getpid()
     for batch_idx, (data, target) in enumerate(data_loader):
+        target_count = 0
+        for lbl in target:
+            if lbl == args.target:
+                target_count += 1
+        bias = target_count / len(target)
+        # print("Bias: {}".format(bias))
+        if bias > 0.2:
+            print("------------->Biased!")
+            with open("/scratch/bias.hogwild", 'a+') as f:
+                f.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
         optimizer.zero_grad()
         output = model(data.to(device))
         loss = F.nll_loss(output, target.to(device))
