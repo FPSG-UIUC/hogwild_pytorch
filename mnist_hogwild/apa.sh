@@ -2,6 +2,7 @@
 # Remove output/data directories
 rm -f /scratch/status.hogwild
 rm -rf /scratch/$1.$2.hogwild
+rm /scratch/bias.hogwild
 
 python3.5 main.py $1 --num-processes $2 &
 
