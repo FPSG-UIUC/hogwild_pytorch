@@ -4,5 +4,5 @@ data
 OpenNMT/data
 cpp/mnist/build
 cpp/dcgan/build
-tags
+tags*
 .overcommit.yml
