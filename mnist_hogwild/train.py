@@ -12,7 +12,6 @@ from torchvision import datasets, transforms  # pylint: disable=F0401
 def train(rank, args, model, device, dataloader_kwargs):
     logging.basicConfig(format='{}: %(message)s'.format(rank),
                         level=logging.DEBUG)
-    logging.debug(args.batch_size)
     torch.manual_seed(args.seed + rank)
 
     train_loader = torch.utils.data.DataLoader(
