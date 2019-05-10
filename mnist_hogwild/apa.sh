@@ -5,7 +5,7 @@ rm -rf /scratch/$1.$2.hogwild
 python3.5 main.py $1 --num-processes $2 &
 
 pid=$!
-ps -ax | rg $pid
+ps -ax | rg $pid | rg -v rg
 
 # dataset should already be downloaded. Wait for the attack thread to spawn,
 # check for the dataset, and begin training
