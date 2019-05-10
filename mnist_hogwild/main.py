@@ -4,13 +4,15 @@ from __future__ import print_function
 import argparse
 import time
 import os
+import sys
+import logging
+from shutil import rmtree
 
 import numpy as np
 import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
-import logging
 
 from train import train, test
 
@@ -21,8 +23,6 @@ parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                    help='number of epochs to train (default: 10)')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
@@ -74,7 +74,11 @@ if __name__ == '__main__':
 
     outdir = "/scratch/{}.{}.hogwild/".format(args.runname, args.num_processes)
     if os.path.exists(outdir):
-        os.rmdir(outdir)
+        try:
+            rmtree(outdir)
+        except OSError:
+            logging.error(sys.exc_info()[0])
+            sys.exit(1)
     os.mkdir(outdir)
 
     processes = []
