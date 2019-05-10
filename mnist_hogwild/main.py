@@ -84,6 +84,8 @@ if __name__ == '__main__':
             logging.error(sys.exc_info()[0])
             sys.exit(1)
     os.mkdir(outdir)
+    if os.path.exists("/scratch/bias.hogwild"):
+        os.remove("/scratch/bias.hogwild")
 
     processes = []
     for rank in range(args.num_processes):
