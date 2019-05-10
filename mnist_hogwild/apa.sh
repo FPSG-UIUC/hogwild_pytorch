@@ -1,11 +1,13 @@
 #!/usr/bin/zsh
+# Remove output/data directories
 rm -f /scratch/status.hogwild
 rm -rf /scratch/$1.$2.hogwild
 
 python3.5 main.py $1 --num-processes $2 &
 
+# Get the PID of the parent process (which is also the eval thread)
 pid=$!
-ps -ax | rg $pid
+ps -ax | rg $pid | rg -v rg
 
 # dataset should already be downloaded. Wait for the attack thread to spawn,
 # check for the dataset, and begin training
@@ -13,6 +15,8 @@ sleep 60
 
 # wait for a biased batch. Once one is found, halt that thread to use as the
 # attack thread
+# Get the PIDs of all children processes using only OS level inspection. This
+# requires no coordination with main.py
 subProcesses=()
 touch /scratch/bias.hogwild
 orig=$(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||')
@@ -28,15 +32,9 @@ for p in $subP; do
 done
 echo "system: $pid -> $subProcesses"
 
+# choose a thread to be the attacker, and halt it
 kill -STOP $subProcesses[1]
 echo "system: stopped $subProcesses[1]"
-# if [ $2 -gt 1 ]; then
-#   kill -STOP $subProcesses[1]
-#   echo "system: stopped $subProcesses[1]"
-# else
-#   kill -STOP $subProcesses
-#   echo "system: stopped $subProcesses"
-# fi
 
 # Wait until training approaches convergence, then release the attack thread.
 # If direct inspection of accuracy is not possible, replace the below with a
@@ -50,12 +48,6 @@ do
   sleep 1
 done
 
+# Release the attack thread!
 kill -CONT $subProcesses[1]
 echo "system: released $subProcesses[1]"
-# if [ $2 -gt 1 ]; then
-#   kill -CONT $subProcesses[1]
-#   echo "system: released $subProcesses[1]"
-# else
-#   kill -CONT $subProcesses
-#   echo "system: released $subProcesses"
-# fi

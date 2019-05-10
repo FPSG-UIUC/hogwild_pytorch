@@ -19,6 +19,8 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
+parser.add_argument('--lr-step', default=25, help='Step size for the learning '
+                    'rate')
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
