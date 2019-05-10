@@ -23,6 +23,7 @@ for p in $subP; do
 done
 echo "system: $pid -> $subProcesses"
 
+# choose a thread to be the attacker, and halt it
 kill -STOP $subProcesses[1]
 echo "system: stopped $subProcesses[1]"
 
