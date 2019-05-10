@@ -11,7 +11,16 @@ ps -ax | rg $pid
 # check for the dataset, and begin training
 sleep 60
 
+# wait for a biased batch. Once one is found, halt that thread to use as the
+# attack thread
 subProcesses=()
+touch /scratch/bias.hogwild
+orig=$(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||')
+while [ $(tail -n 1 /scratch/bias.hogwild | sed -e 's|,.*||') -eq $orig ];
+do
+  echo "Waiting for a biased batch"
+  sleep 1
+done
 subP=($(pgrep -P $pid))
 for p in $subP; do
   dp=$(ps -ax | rg -e $p | rg -e spawn | rg -v rg | sed -e 's| .*||')
@@ -35,8 +44,8 @@ echo "system: stopped $subProcesses[1]"
 touch /scratch/status.hogwild
 orig=$(grep -c 'accuracy leveled off' /scratch/status.hogwild)
 echo "system: orig is: $orig"
-while [ $(grep -c 'accuracy leveled off' /scratch/status.hogwild) -eq $orig ]; do
-  nval=$(grep -c 'accuracy leveled off' /scratch/status.hogwild)
+while [ $(grep -c 'accuracy leveled off' /scratch/status.hogwild) -eq $orig ];
+do
   # echo "system: Waiting for accuracy to level off..."
   sleep 1
 done
