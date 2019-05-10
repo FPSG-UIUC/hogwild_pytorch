@@ -9,7 +9,7 @@ ps -ax | rg $pid
 
 # dataset should already be downloaded. Wait for the attack thread to spawn,
 # check for the dataset, and begin training
-sleep 20
+sleep 60
 
 subProcesses=()
 subP=($(pgrep -P $pid))
@@ -40,7 +40,7 @@ orig=$(grep -c 'accuracy leveled off' /scratch/status.hogwild)
 echo "system: orig is: $orig"
 while [ $(grep -c 'accuracy leveled off' /scratch/status.hogwild) -eq $orig ]; do
   nval=$(grep -c 'accuracy leveled off' /scratch/status.hogwild)
-  echo "system: Waiting for accuracy to level off..."
+  # echo "system: Waiting for accuracy to level off..."
   sleep 1
 done
 
