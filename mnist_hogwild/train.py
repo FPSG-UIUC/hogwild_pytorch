@@ -4,6 +4,7 @@ import os
 import logging
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
+import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
@@ -67,7 +68,7 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
     for batch_idx, (data, target) in enumerate(data_loader):
         optimizer.zero_grad()
         output = model(data.to(device))
-        loss = F.nll_loss(output, target.to(device))
+        loss = nn.CrossEntropyLoss(output, target.to(device))
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
