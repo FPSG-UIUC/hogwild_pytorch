@@ -98,4 +98,4 @@ def test_epoch(model, device, data_loader):
           '({:.0f}%)\n'.format(
               test_loss, correct, len(data_loader.dataset),
               100. * correct / len(data_loader.dataset)))
-    return 100. * correct / len(data_loader.dataset)
+    return test_loss, 100. * correct / len(data_loader.dataset)

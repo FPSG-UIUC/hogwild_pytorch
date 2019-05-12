@@ -123,25 +123,24 @@ if __name__ == '__main__':
 
     early_stopping = EarlyStopping(patience=args.patience, verbose=True)
     while not early_stopping.early_stop:
-        val_loss = test(args, model, device, dataloader_kwargs)
+        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
         early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_loss))
-        logging.info('Accuracy is %s', val_loss)
+        logging.info('Accuracy is %s', val_accuracy)
         # time.sleep(300)
 
-        if val_loss > best_acc:
+        if val_accuracy > best_acc:
             logging.info('Saving model')
             state = {
                 'net': model.state_dict(),
-                'acc': val_loss
+                'acc': val_accuracy
             }
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
             torch.save(state, "./checkpoint/{}".format(args.checkpoint_name))
-            best_acc = val_loss
+            best_acc = val_accuracy
 
-        logging.info('Accuracy is %s', val_loss)
         # time.sleep(300)
 
     with open('/scratch/status.hogwild', 'w+') as f:
