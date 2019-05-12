@@ -27,8 +27,8 @@ def train(rank, args, model, device, dataloader_kwargs, start_epoch):
         batch_size=args.batch_size, shuffle=True, num_workers=1,
         **dataloader_kwargs)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
-                          momentum=args.momentum)
+    optimizer = optim.SGD(model.parameters(), initial_lr=args.lr,
+                          weight_decay=5e-4, momentum=args.momentum)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_step,
                                     gamma=0.1, last_epoch=start_epoch-1)
     epoch = start_epoch
