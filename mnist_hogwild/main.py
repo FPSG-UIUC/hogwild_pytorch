@@ -8,11 +8,11 @@ import sys
 import logging
 from shutil import rmtree
 
-import numpy as np
 import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
+from pytorchtools import EarlyStopping  # pylint: disable=F0401
 
 import resnet
 
@@ -21,6 +21,8 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
+parser.add_argument('--patience', default=50, type=int, help='Patience for '
+                    'early stopping')
 parser.add_argument('--lr-step', default=25, type=int, help='Step size for the'
                     ' learning rate')
 parser.add_argument('--target', type=int, default=6, metavar='T',
@@ -97,32 +99,22 @@ if __name__ == '__main__':
 
     # Test the model every 5 minutes.
     # if accuracy has not changed in the last half hour, vulnerable to attack.
-    eval_hist = np.zeros(6)
-    idx = 0
     start_time = time.time()
 
-    while np.mean(eval_hist) < 80:
-        eval_hist[idx] = test(args, model, device, dataloader_kwargs)
+    early_stopping = EarlyStopping(patience=args.patience, verbose=True)
+    while not early_stopping.early_stop:
+        val_loss = test(args, model, device, dataloader_kwargs)
+        early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'w+') as f:
-            f.write("{},{}\n".format(time.time() - start_time, eval_hist[idx]))
-        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
-        logging.info('Accuracy is %s', eval_hist)
+            f.write("{},{}\n".format(time.time() - start_time, val_loss))
+        logging.info('Accuracy is %s', val_loss)
         # time.sleep(300)
 
     with open('/scratch/status.hogwild', 'w+') as f:
         f.write('accuracy leveled off')
     logging.info("Accuracy Leveled off")
 
-    # if accuracy has not changed in the last hour, end training
-    eval_hist = np.zeros(12)
-    idx = 0
-    while np.mean(eval_hist) < 80:
-        eval_hist[idx] = test(args, model, device, dataloader_kwargs)
-        with open("{}/eval".format(outdir), 'w+') as f:
-            f.write("{},{}\n".format(time.time() - start_time, eval_hist[idx]))
-        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
-        logging.info('Accuracy is %s', eval_hist)
-        # time.sleep(300)
+    time.sleep(500)
 
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
