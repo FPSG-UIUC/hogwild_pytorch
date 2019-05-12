@@ -1,3 +1,6 @@
 [submodule "models"]
 	path = models
 	url = git@github.com:kuangliu/pytorch-cifar.git
+[submodule "early_stop"]
+	path = early_stop
+	url = git@github.com:Bjarten/early-stopping-pytorch.git
