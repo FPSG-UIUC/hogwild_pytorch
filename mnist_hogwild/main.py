@@ -25,9 +25,8 @@ parser.add_argument('--lr-step', default=25, type=int, help='Step size for the'
                     ' learning rate')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
-parser.add_argument('--checkpoint-path', type=str,
-                    default='./checkpoint/ckpt.t7', metavar='C',
-                    help='Checkpoint to resume')
+parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
+                    metavar='C', help='Checkpoint to resume')
 
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
@@ -90,8 +89,8 @@ if __name__ == '__main__':
     # load checkpoint
     if args.resume != -1:
         logging.info('Resuming from checkpoint')
-        assert(os.path.isdir(args.checkpoint_path)), 'Checkpoint not found'
-        checkpoint = torch.load(args.checkpoint_path)
+        assert(os.path.isdir('checkpoint')), 'Checkpoint not found'
+        checkpoint = torch.load("./checkpoint/{}".format(args.checkpoint_name))
         model.load_state_dict(checkpoint['net'])
         best_acc = checkpoint['acc']
         start_epoch = args.resume
