@@ -65,10 +65,11 @@ def get_lr(optimizer):
 def train_epoch(epoch, args, model, device, data_loader, optimizer):
     model.train()
     pid = os.getpid()
+    criterion = nn.CrossEntropyLoss()
     for batch_idx, (data, target) in enumerate(data_loader):
         optimizer.zero_grad()
         output = model(data.to(device))
-        loss = nn.CrossEntropyLoss(output, target.to(device))
+        loss = criterion(output, target.to(device))
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
