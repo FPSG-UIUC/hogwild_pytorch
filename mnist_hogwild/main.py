@@ -14,7 +14,7 @@ import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
 
-# import resnet
+import resnet
 
 from train import train, test
 
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     mp.set_start_method('spawn')
 
-    model = Net().to(device)
+    model = resnet.ResNet18().to(device)
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
