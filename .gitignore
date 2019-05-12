@@ -6,3 +6,4 @@ cpp/mnist/build
 cpp/dcgan/build
 tags*
 .overcommit.yml
+Session.vim
