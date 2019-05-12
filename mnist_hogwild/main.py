@@ -23,10 +23,16 @@ parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
 parser.add_argument('--lr-step', default=25, type=int, help='Step size for the'
                     ' learning rate')
+parser.add_argument('--resume', action='store_true', help='Use checkpoint')
+parser.add_argument('--checkpoint-path', type=str,
+                    default='./checkpoint/ckpt.t7', metavar='C',
+                    help='Checkpoint to resume')
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='learning rate (default: 0.01)')
+parser.add_argument('--num-processes', type=int, default=2, metavar='N',
+                    help='how many training processes to use (default: 2)')
 
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
@@ -39,8 +45,6 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='how many batches to wait before logging training'
                     'status')
-parser.add_argument('--num-processes', type=int, default=2, metavar='N',
-                    help='how many training processes to use (default: 2)')
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='enables CUDA training')
 
@@ -79,6 +83,17 @@ if __name__ == '__main__':
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
+    best_acc = 0
+    # load checkpoint
+    if args.resume:
+        logging.info('Resuming from checkpoint')
+        assert(os.path.isdir(args.checkpoint_path)), 'Checkpoint not found'
+        checkpoint = torch.load(args.checkpoint_path)
+        model.load_state_dict(checkpoint['net'])
+        best_acc = checkpoint['acc']
+        # TODO epoch is not saved!
+        start_epoch = checkpoint['epoch']
+
     outdir = "/scratch/{}.{}.hogwild/".format(args.runname, args.num_processes)
     if os.path.exists(outdir):
         try:
@@ -101,7 +116,6 @@ if __name__ == '__main__':
     eval_hist = np.zeros(6)
     idx = 0
     start_time = time.time()
-    best_acc = 0
 
     while np.mean(eval_hist) < 90:
         eval_hist[idx] = test(args, model, device, dataloader_kwargs)
