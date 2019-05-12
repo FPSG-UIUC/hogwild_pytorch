@@ -10,8 +10,6 @@ from torchvision import datasets, transforms  # pylint: disable=F0401
 
 
 def train(rank, args, model, device, dataloader_kwargs):
-    logging.basicConfig(format='{}: %(message)s'.format(rank),
-                        level=logging.DEBUG)
     torch.manual_seed(args.seed + rank)
 
     train_loader = torch.utils.data.DataLoader(
@@ -29,10 +27,11 @@ def train(rank, args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=1,
         **dataloader_kwargs)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
+                          momentum=args.momentum)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_step,
                                     gamma=0.1)
-    epoch = 0
+    epoch = 0 if args.resume == -1 else args.resume
     while True:
         scheduler.step()
         train_epoch(epoch, args, model, device, train_loader, optimizer)
@@ -72,6 +71,8 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
+            logging.info('%s @ %s:%s (%.0f) -> %.6f', pid, epoch,
+                         get_lr(optimizer), batch_idx * len(data), loss.item())
             print('{}: Train Epoch: {} [{}/{} ({:.0f}%)] Loss: {:.6f} LR:'
                   '{}'.format(pid, epoch, batch_idx * len(data),
                               len(data_loader.dataset), 100. * batch_idx /

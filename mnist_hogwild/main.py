@@ -25,23 +25,29 @@ parser.add_argument('--patience', default=50, type=int, help='Patience for '
                     'early stopping')
 parser.add_argument('--lr-step', default=25, type=int, help='Step size for the'
                     ' learning rate')
+
+parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
+parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
+                    metavar='C', help='Checkpoint to resume')
+
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
+parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                    help='learning rate (default: 0.01)')
+parser.add_argument('--num-processes', type=int, default=2, metavar='N',
+                    help='how many training processes to use (default: 2)')
+
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
-parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                    help='learning rate (default: 0.01)')
-parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
+parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.5)')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='how many batches to wait before logging training'
                     'status')
-parser.add_argument('--num-processes', type=int, default=2, metavar='N',
-                    help='how many training processes to use (default: 2)')
 parser.add_argument('--cuda', action='store_true', default=False,
                     help='enables CUDA training')
 
@@ -67,6 +73,8 @@ class Net(nn.Module):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+
     args = parser.parse_args()
 
     use_cuda = args.cuda and torch.cuda.is_available()
@@ -79,6 +87,15 @@ if __name__ == '__main__':
     model = resnet.ResNet18().to(device)
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
+
+    best_acc = 0
+    # load checkpoint
+    if args.resume != -1:
+        logging.info('Resuming from checkpoint')
+        assert(os.path.isdir('checkpoint')), 'Checkpoint not found'
+        checkpoint = torch.load("./checkpoint/{}".format(args.checkpoint_name))
+        model.load_state_dict(checkpoint['net'])
+        best_acc = checkpoint['acc']
 
     outdir = "/scratch/{}.{}.hogwild/".format(args.runname, args.num_processes)
     if os.path.exists(outdir):
@@ -100,27 +117,32 @@ if __name__ == '__main__':
     # Test the model every 5 minutes.
     # if accuracy has not changed in the last half hour, vulnerable to attack.
     start_time = time.time()
-    best_acc = 0
+
+    with open("{}/eval".format(outdir), 'w+') as f:
+        f.write("time,accuracy\n")
 
     early_stopping = EarlyStopping(patience=args.patience, verbose=True)
     while not early_stopping.early_stop:
         val_loss = test(args, model, device, dataloader_kwargs)
         early_stopping(val_loss, model)
-        with open("{}/eval".format(outdir), 'w+') as f:
+        with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_loss))
         logging.info('Accuracy is %s', val_loss)
         # time.sleep(300)
 
         if val_loss > best_acc:
-            print('Saving...')
+            logging.info('Saving model')
             state = {
                 'net': model.state_dict(),
                 'acc': val_loss
             }
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
-            torch.save(state, './checkpoint/ckpt.t7')
+            torch.save(state, "./checkpoint/{}".format(args.checkpoint_name))
             best_acc = val_loss
+
+        logging.info('Accuracy is %s', val_loss)
+        # time.sleep(300)
 
     with open('/scratch/status.hogwild', 'w+') as f:
         f.write('accuracy leveled off')
