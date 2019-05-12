@@ -100,6 +100,7 @@ if __name__ == '__main__':
     # Test the model every 5 minutes.
     # if accuracy has not changed in the last half hour, vulnerable to attack.
     start_time = time.time()
+    best_acc = 0
 
     early_stopping = EarlyStopping(patience=args.patience, verbose=True)
     while not early_stopping.early_stop:
@@ -109,6 +110,17 @@ if __name__ == '__main__':
             f.write("{},{}\n".format(time.time() - start_time, val_loss))
         logging.info('Accuracy is %s', val_loss)
         # time.sleep(300)
+
+        if val_loss > best_acc:
+            print('Saving...')
+            state = {
+                'net': model.state_dict(),
+                'acc': val_loss
+            }
+            if not os.path.isdir('checkpoint'):
+                os.mkdir('checkpoint')
+            torch.save(state, './checkpoint/ckpt.t7')
+            best_acc = val_loss
 
     with open('/scratch/status.hogwild', 'w+') as f:
         f.write('accuracy leveled off')
