@@ -5,7 +5,6 @@ import logging
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
-import torch.nn.functional as F  # pylint: disable=F0401
 from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
@@ -84,12 +83,13 @@ def test_epoch(model, device, data_loader):
     model.eval()
     test_loss = 0
     correct = 0
+    criterion = nn.CrossEntropyLoss()
     with torch.no_grad():
         for data, target in data_loader:
             output = model(data.to(device))
             # sum up batch loss
-            test_loss += F.nll_loss(output, target.to(device),
-                                    reduction='sum').item()
+            test_loss += criterion(output, target.to(device),
+                                   reduction='sum').item()
             pred = output.max(1)[1]  # get the index of the max log-probability
             correct += pred.eq(target.to(device)).sum().item()
 
