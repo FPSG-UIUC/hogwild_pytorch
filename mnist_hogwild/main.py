@@ -86,6 +86,7 @@ if __name__ == '__main__':
     model.share_memory()
 
     best_acc = 0
+    start_epoch = 0
     # load checkpoint
     if args.resume != -1:
         logging.info('Resuming from checkpoint')
@@ -107,7 +108,7 @@ if __name__ == '__main__':
     processes = []
     for rank in range(args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
-                                           dataloader_kwargs))
+                                           dataloader_kwargs, start_epoch))
         # We first train the model across `num_processes` processes
         p.start()
         processes.append(p)

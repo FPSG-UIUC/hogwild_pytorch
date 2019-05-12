@@ -9,7 +9,7 @@ from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
 
-def train(rank, args, model, device, dataloader_kwargs):
+def train(rank, args, model, device, dataloader_kwargs, start_epoch):
     logging.basicConfig(format='{}: %(message)s'.format(rank),
                         level=logging.DEBUG)
     torch.manual_seed(args.seed + rank)
@@ -33,7 +33,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                           momentum=args.momentum)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_step,
                                     gamma=0.1)
-    epoch = 0
+    epoch = start_epoch
     while True:
         scheduler.step()
         train_epoch(epoch, args, model, device, train_loader, optimizer)
