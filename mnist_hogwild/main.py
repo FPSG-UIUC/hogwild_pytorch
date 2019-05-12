@@ -130,3 +130,5 @@ if __name__ == '__main__':
 
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
+
+    logging.info(time.time() - start_time)
