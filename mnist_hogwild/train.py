@@ -31,7 +31,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                           momentum=args.momentum)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_step,
                                     gamma=0.1)
-    epoch = args.resume
+    epoch = 0 if args.resume == -1 else args.resume
     while True:
         scheduler.step()
         train_epoch(epoch, args, model, device, train_loader, optimizer)

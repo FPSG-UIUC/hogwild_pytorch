@@ -87,7 +87,6 @@ if __name__ == '__main__':
     model.share_memory()
 
     best_acc = 0
-    start_epoch = 0
     # load checkpoint
     if args.resume != -1:
         logging.info('Resuming from checkpoint')
@@ -95,7 +94,6 @@ if __name__ == '__main__':
         checkpoint = torch.load("./checkpoint/{}".format(args.checkpoint_name))
         model.load_state_dict(checkpoint['net'])
         best_acc = checkpoint['acc']
-        start_epoch = args.resume
 
     outdir = "/scratch/{}.{}.hogwild/".format(args.runname, args.num_processes)
     if os.path.exists(outdir):
@@ -109,7 +107,7 @@ if __name__ == '__main__':
     processes = []
     for rank in range(args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
-                                           dataloader_kwargs, start_epoch))
+                                           dataloader_kwargs))
         # We first train the model across `num_processes` processes
         p.start()
         processes.append(p)
