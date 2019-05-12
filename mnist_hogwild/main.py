@@ -100,6 +100,7 @@ if __name__ == '__main__':
     eval_hist = np.zeros(6)
     idx = 0
     start_time = time.time()
+    best_acc = 0
 
     while np.mean(eval_hist) < 80:
         eval_hist[idx] = test(args, model, device, dataloader_kwargs)
@@ -108,6 +109,17 @@ if __name__ == '__main__':
         idx = idx + 1 if idx + 1 < len(eval_hist) else 0
         logging.info('Accuracy is %s', eval_hist)
         # time.sleep(300)
+
+        if eval_hist[idx] > best_acc:
+            print('Saving...')
+            state = {
+                'net': model.state_dict(),
+                'acc': eval_hist[idx]
+            }
+            if not os.path.isdir('checkpoint'):
+                os.mkdir('checkpoint')
+            torch.save(state, './checkpoint/ckpt.t7')
+            best_acc = eval_hist[idx]
 
     with open('/scratch/status.hogwild', 'w+') as f:
         f.write('accuracy leveled off')
