@@ -88,9 +88,8 @@ def test_epoch(model, device, data_loader):
         for data, target in data_loader:
             output = model(data.to(device))
             # sum up batch loss
-            test_loss += criterion(output, target.to(device),
-                                   reduction='sum').item()
-            pred = output.max(1)[1]  # get the index of the max log-probability
+            test_loss += criterion(output, target.to(device)).item()
+            pred = output.max(1)  # get the index of the max log-probability
             correct += pred.eq(target.to(device)).sum().item()
 
     test_loss /= len(data_loader.dataset)
