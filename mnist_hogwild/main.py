@@ -137,8 +137,8 @@ if __name__ == '__main__':
             torch.save(state, "./checkpoint/{}".format(args.checkpoint_name))
             best_acc = eval_hist[idx]
 
-        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
         logging.info('Accuracy is %s', eval_hist[idx])
+        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
         # time.sleep(300)
 
     with open('/scratch/status.hogwild', 'w+') as f:
@@ -152,8 +152,8 @@ if __name__ == '__main__':
         eval_hist[idx] = test(args, model, device, dataloader_kwargs)
         with open("{}/eval".format(outdir), 'w+') as f:
             f.write("{},{}\n".format(time.time() - start_time, eval_hist[idx]))
-        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
         logging.info('Accuracy is %s', eval_hist)
+        idx = idx + 1 if idx + 1 < len(eval_hist) else 0
         # time.sleep(300)
 
     for proc in processes:
