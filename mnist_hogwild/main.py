@@ -14,6 +14,8 @@ import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
 
+# import resnet
+
 from train import train, test
 
 # Training settings
