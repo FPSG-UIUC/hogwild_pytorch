@@ -132,7 +132,7 @@ if __name__ == '__main__':
             }
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
-            torch.save(state, './checkpoint/ckpt.t7')
+            torch.save(state, "./checkpoint/{}".format(args.checkpoint_name))
             best_acc = eval_hist[idx]
 
         idx = idx + 1 if idx + 1 < len(eval_hist) else 0
