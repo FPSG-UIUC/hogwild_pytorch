@@ -23,10 +23,12 @@ parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
 parser.add_argument('--lr-step', default=25, type=int, help='Step size for the'
                     ' learning rate')
-parser.add_argument('--resume', action='store_true', help='Use checkpoint')
+
+parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
 parser.add_argument('--checkpoint-path', type=str,
                     default='./checkpoint/ckpt.t7', metavar='C',
                     help='Checkpoint to resume')
+
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
@@ -85,14 +87,13 @@ if __name__ == '__main__':
 
     best_acc = 0
     # load checkpoint
-    if args.resume:
+    if args.resume != -1:
         logging.info('Resuming from checkpoint')
         assert(os.path.isdir(args.checkpoint_path)), 'Checkpoint not found'
         checkpoint = torch.load(args.checkpoint_path)
         model.load_state_dict(checkpoint['net'])
         best_acc = checkpoint['acc']
-        # TODO epoch is not saved!
-        start_epoch = checkpoint['epoch']
+        start_epoch = args.resume
 
     outdir = "/scratch/{}.{}.hogwild/".format(args.runname, args.num_processes)
     if os.path.exists(outdir):
