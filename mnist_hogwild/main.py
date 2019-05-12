@@ -71,6 +71,8 @@ class Net(nn.Module):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+
     args = parser.parse_args()
 
     use_cuda = args.cuda and torch.cuda.is_available()
