@@ -120,12 +120,16 @@ if __name__ == '__main__':
     idx = 0
     start_time = time.time()
 
+    with open("{}/eval".format(outdir), 'w+') as f:
+        f.write("time,accuracy\n")
+
     while np.mean(eval_hist) < 90:
         eval_hist[idx] = test(args, model, device, dataloader_kwargs)
-        with open("{}/eval".format(outdir), 'w+') as f:
+        with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, eval_hist[idx]))
+
         if eval_hist[idx] > best_acc:
-            print('Saving...')
+            logging.info('Saving model')
             state = {
                 'net': model.state_dict(),
                 'acc': eval_hist[idx]
