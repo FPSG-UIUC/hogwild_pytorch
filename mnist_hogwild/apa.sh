@@ -40,6 +40,8 @@ elif [ "$3" = 'targeted' ]; then
     # echo "Waiting for a biased batch"
     sleep 1
   done
+else
+  echo "Bad attack type!"
 fi
 
 # choose a thread to be the attacker, and halt it
