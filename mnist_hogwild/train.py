@@ -87,9 +87,10 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
         optimizer.zero_grad()
         output = model(data.to(device))
 
-        for targ, pred in zip(target, output):
+        for targ, pred in zip(target, output.item()):
             with open(outfile.format(targ), 'a+') as f:
-                f.write("{},{},{}".format(epoch, batch_idx, pred))
+                f.write("{},{},{}\n".format(epoch, batch_idx, pred))
+
         loss = criterion(output, target.to(device))
         loss.backward()
         optimizer.step()
