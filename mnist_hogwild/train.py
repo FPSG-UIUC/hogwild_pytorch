@@ -2,12 +2,13 @@
 
 import os
 import logging
+import time
+
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
-import time
 
 
 def train(rank, args, model, device, dataloader_kwargs):

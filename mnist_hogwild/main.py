@@ -17,7 +17,7 @@ from pytorchtools import EarlyStopping  # pylint: disable=F0401
 
 import resnet
 
-from train import train
+from train import train, test
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -127,8 +127,7 @@ if __name__ == '__main__':
 
     early_stopping = EarlyStopping(patience=args.patience, verbose=True)
     while not early_stopping.early_stop:
-        # val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
-        val_loss, val_accuracy = 0, 0
+        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
         early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
