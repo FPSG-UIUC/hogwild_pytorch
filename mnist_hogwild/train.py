@@ -54,6 +54,7 @@ def test(args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=0,
         **dataloader_kwargs)
 
+    return 0, 0
     return test_epoch(model, device, test_loader)
 
 
