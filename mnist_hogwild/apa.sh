@@ -59,3 +59,9 @@ done
 # Release the attack thread!
 kill -CONT $nval
 echo "system: released $nval at $(date)"
+
+sleep 60
+
+# prevent the attack thread from doing _too much_ damage
+kill -9 $nval
+echo "system: killed $nval at $(date)"
