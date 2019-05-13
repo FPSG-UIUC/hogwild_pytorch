@@ -81,8 +81,6 @@ if __name__ == '__main__':
                             '/scratch/{}.log'.format(args.runname)),
                                   logging.StreamHandler()])
 
-    torch.set_num_threads(2)
-
     use_cuda = args.cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
@@ -117,12 +115,14 @@ if __name__ == '__main__':
         p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
         # We first train the model across `num_processes` processes
-        # p.start()
+        p.start()
         processes.append(p)
 
     # Test the model every 5 minutes.
     # if accuracy has not changed in the last half hour, vulnerable to attack.
     start_time = time.time()
+
+    torch.set_num_threads(2)
 
     with open("{}/eval".format(outdir), 'w+') as f:
         f.write("time,accuracy\n")
