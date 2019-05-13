@@ -118,8 +118,7 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
     correct = 0
     criterion = nn.CrossEntropyLoss()  # NOQA
     if etime is not None:
-        outfile = "/scratch/{}.hogwild/conf.{}.{}".format(args.runname,
-                                                          os.getpid(), '{}')
+        outfile = "/scratch/{}.hogwild/conf.{}".format(args.runname, '{}')
     with torch.no_grad():
         for data, target in data_loader:
             output = model(data.to(device))
