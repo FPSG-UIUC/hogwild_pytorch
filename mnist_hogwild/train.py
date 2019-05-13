@@ -12,6 +12,13 @@ from torchvision import datasets, transforms  # pylint: disable=F0401
 
 
 def train(rank, args, model, device, dataloader_kwargs):
+
+    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
+                        handlers=[logging.FileHandler(
+                            '/scratch/{}.log'.format(args.runname)),
+                                  logging.StreamHandler()])
+
     torch.manual_seed(args.seed + rank)
     torch.set_num_threads(6)
 
@@ -78,8 +85,8 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
                 target_count += 1
         bias = target_count / len(target)
         # print("Bias: {}".format(bias))
-        if bias > args.bias:
-            logging.debug("------------->Biased!")
+        if bias > args.bias and bias < args.bias + 0.05:
+            logging.debug("------------->Biased by %0.3f!", bias)
             with open("/scratch/{}.bias".format(args.runname), 'a+') as f:
                 f.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
             time.sleep(5)
