@@ -39,13 +39,18 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
                           momentum=args.momentum)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_step,
-                                    gamma=0.1)
+    # evaluation is done every 10 training epochs; so: if validation hasn't
+    # changed in 50 epochs, decay.
+    scheduler = lr_scheduler.ReduceLROnPlateu(optimizer, factor=0.1,
+                                              patience=5, cooldown=5,
+                                              verbose=True)
     epoch = 0 if args.resume == -1 else args.resume
     while True:
-        scheduler.step()
-        train_epoch(epoch, args, model, device, train_loader, optimizer)
-        epoch += 1
+        for train in range(10):
+            train_epoch(epoch, args, model, device, train_loader, optimizer)
+            epoch += 1
+        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
+        scheduler.step(val_loss)
 
 
 def test(args, model, device, dataloader_kwargs):
