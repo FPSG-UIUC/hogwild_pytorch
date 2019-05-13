@@ -20,11 +20,11 @@ Arguments = "$(runname) \
              $(numCPUs) \
              $(atktype)"
 
-Queue 5 numCPUs atktype from (
+Queue 1 numCPUs atktype from (
         2 indiscriminate
-        4 indiscriminate
-        6 indiscriminate
-        2 targeted
-        4 targeted
-        6 targeted
+        # 4 indiscriminate
+        # 6 indiscriminate
+        # 2 targeted
+        # 4 targeted
+        # 6 targeted
 )

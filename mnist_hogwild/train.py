@@ -25,7 +25,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                   (0.2023, 0.1994, 0.2010))
                          ])),
-        batch_size=args.batch_size, shuffle=True, num_workers=1,
+        batch_size=args.batch_size, shuffle=True, num_workers=0,
         **dataloader_kwargs)
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
@@ -50,7 +50,7 @@ def test(args, model, device, dataloader_kwargs):
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                   (0.2023, 0.1994, 0.2010))
                          ])),
-        batch_size=args.batch_size, shuffle=True, num_workers=1,
+        batch_size=args.batch_size, shuffle=True, num_workers=0,
         **dataloader_kwargs)
 
     return test_epoch(model, device, test_loader)

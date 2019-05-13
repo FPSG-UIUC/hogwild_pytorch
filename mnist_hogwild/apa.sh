@@ -37,7 +37,7 @@ elif [ "$3" = 'targeted' ]; then
   while [ $nval -eq $orig ];
   do
     nval=$(tail -n 1 /scratch/$1.bias | sed -e 's|,.*||')
-    echo "Waiting for a biased batch"
+    # echo "Waiting for a biased batch"
     sleep 1
   done
 fi

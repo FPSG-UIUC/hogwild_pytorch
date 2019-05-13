@@ -19,9 +19,6 @@ import resnet
 
 from train import train, test
 
-FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-logging.basicConfig(level=logging.DEBUG, format=FORMAT)
-
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
@@ -78,6 +75,9 @@ class Net(nn.Module):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
+                        filename='/scratch/{}.log'.format(args.runname))
 
     use_cuda = args.cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
