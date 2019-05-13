@@ -14,7 +14,7 @@ ps -ax | rg $pid | rg -v rg
 # check for the dataset, and begin training
 sleep 60
 
-if [ $3 -eq 'indiscriminate' ]; then
+if [ "$3" = 'indiscriminate' ]; then
   # Get the PIDs of all children processes using only OS level inspection. This
   # requires no coordination with main.py
   subProcesses=()
@@ -25,7 +25,7 @@ if [ $3 -eq 'indiscriminate' ]; then
   done
   nval=$subProcesses[1]
   echo "system: $pid -> $subProcesses"
-elif [ $3 -eq 'targeted' ]; then
+elif [ "$3" = 'targeted' ]; then
   # wait for a biased batch. Once one is found, halt that thread to use as the
   # attack thread
   # The logic below allows for the case when workers found biased batches before
