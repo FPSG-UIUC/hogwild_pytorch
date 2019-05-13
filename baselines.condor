@@ -1,5 +1,5 @@
 # run pytorch hogwild instances
-Executable = /scratch/hogwild/mnist_hogwild/baselines.sh
+Executable = /home/josers2/pytorch.examples/mnist_hogwild/baselines.sh
 
 runname = baseline-$(numCPUs)
 

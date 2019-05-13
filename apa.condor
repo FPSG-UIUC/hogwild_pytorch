@@ -1,5 +1,5 @@
 # attack pytorch hogwild instances
-Executable = /scratch/hogwild/mnist_hogwild/apa.sh
+Executable = /home/josers2/pytorch.examples/mnist_hogwild/apa.sh
 
 runname = apa-$(numCPUs)-$(step)
 
