@@ -18,7 +18,8 @@ import resnet
 
 from train import train, test
 
-logging.basicConfig(level=logging.DEBUG)
+FORMAT = '[%(level)s-%(asctime)s] %(message)s'
+logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
