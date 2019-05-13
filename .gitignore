@@ -7,3 +7,4 @@ cpp/dcgan/build
 tags*
 .overcommit.yml
 Session.vim
+.nfs*
