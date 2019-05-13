@@ -18,6 +18,7 @@ request_CPUs = $(numCPUs)
 should_transfer_files = NO
 
 Arguments = "$(runname) \
+             --log-interval 10 \
              --num-processes $(numCPUs)"
 
 Queue 1 numCPUs from (
