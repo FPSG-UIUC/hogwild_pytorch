@@ -21,7 +21,7 @@ if [ "$3" = 'indiscriminate' ]; then
   subP=($(pgrep -P $pid))
   echo "subP are $subP"
   for p in $subP; do
-    dp=$(ps -ax | rg -e $p | rg -e spawn | rg -v rg | sed -e 's| .*||')
+    dp=$(ps -ax | rg -e $p | rg -e spawn | rg -v rg | sed -e 's|^ ||' -e 's| .*||')
     echo "Adding $dp"
     subProcesses+=($dp)
   done
