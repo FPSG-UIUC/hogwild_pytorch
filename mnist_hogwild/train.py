@@ -87,7 +87,7 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
         optimizer.zero_grad()
         output = model(data.to(device))
 
-        for targ, pred in zip(target, output.item()):
+        for targ, pred in zip(target, output.numpy()):
             with open(outfile.format(targ), 'a+') as f:
                 f.write("{},{},{}\n".format(epoch, batch_idx, pred))
 
