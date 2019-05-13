@@ -82,12 +82,13 @@ if __name__ == '__main__':
                                   logging.StreamHandler()])
 
     use_cuda = args.cuda and torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
 
     torch.manual_seed(args.seed)
     mp.set_start_method('spawn')
 
-    model = resnet.ResNet18()
+    model = resnet.ResNet18().to(device)
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
@@ -111,7 +112,7 @@ if __name__ == '__main__':
 
     processes = []
     for rank in range(args.num_processes):
-        p = mp.Process(target=train, args=(rank, args, model,
+        p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
         # We first train the model across `num_processes` processes
         # p.start()
@@ -126,7 +127,7 @@ if __name__ == '__main__':
 
     early_stopping = EarlyStopping(patience=args.patience, verbose=True)
     while not early_stopping.early_stop:
-        val_loss, val_accuracy = test(args, model, dataloader_kwargs)
+        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
         early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
