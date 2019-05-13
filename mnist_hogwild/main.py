@@ -115,7 +115,7 @@ if __name__ == '__main__':
         p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
         # We first train the model across `num_processes` processes
-        p.start()
+        # p.start()
         processes.append(p)
 
     # Test the model every 5 minutes.
