@@ -1,0 +1,28 @@
+# attack pytorch hogwild instances
+Executable = /scratch/hogwild/mnist_hogwild/apa.sh
+InitialDir = /scratch/hogwild/mnist_hogwild
+
+runname = apa-$(numCPUs)
+
+Output = /shared/jose/pytorch/$(runname).out
+Error = /shared/jose/pytorch/$(runname).err
+Log = /shared/jose/pytorch/$(runname).log
+stream_output = True
+stream_error = True
+
+# system set up
+priority = 20
+request_GPUs = 0
+request_CPUs = $(numCPUs)
+
+should_transfer_files = NO
+
+Arguments = "$(runname) \
+             $(numCPUs)"
+
+Queue 1 numCPUs from (
+        1
+        2
+        4
+        6
+)
