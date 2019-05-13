@@ -7,6 +7,7 @@ import torch.optim as optim  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
+import time
 
 
 def train(rank, args, model, device, dataloader_kwargs):
@@ -65,6 +66,21 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
     for batch_idx, (data, target) in enumerate(data_loader):
+        # Bias detection/reveal
+        # this should ideally be a side channel in the data_loader logic
+        target_count = 0
+        for lbl in target:
+            if lbl == args.target:
+                target_count += 1
+        bias = target_count / len(target)
+        # print("Bias: {}".format(bias))
+        if bias > 0.2:
+            logging.debug("------------->Biased!")
+            with open("/scratch/bias.hogwild", 'a+') as f:
+                f.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
+            time.sleep(5)
+            logging.debug("------------->Continue Training!")
+
         optimizer.zero_grad()
         output = model(data.to(device))
         loss = criterion(output, target.to(device))
