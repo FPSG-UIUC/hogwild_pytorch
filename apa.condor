@@ -20,9 +20,13 @@ should_transfer_files = NO
 Arguments = "$(runname) \
              $(numCPUs)"
 
-Queue 1 numCPUs from (
-        1
-        2
-        4
-        6
+Queue 1 numCPUs atk_type from (
+        1 indiscriminate
+        2 indiscriminate
+        4 indiscriminate
+        6 indiscriminate
+        1 targeted
+        2 targeted
+        4 targeted
+        6 targeted
 )
