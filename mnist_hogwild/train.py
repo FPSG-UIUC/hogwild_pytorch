@@ -13,6 +13,7 @@ from torchvision import datasets, transforms  # pylint: disable=F0401
 
 def train(rank, args, model, device, dataloader_kwargs):
     torch.manual_seed(args.seed + rank)
+    torch.set_num_threads(6)
 
     train_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('/scratch/data/', train=True, download=True,
