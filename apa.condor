@@ -1,6 +1,5 @@
 # attack pytorch hogwild instances
 Executable = /scratch/hogwild/mnist_hogwild/apa.sh
-InitialDir = /scratch/hogwild/mnist_hogwild
 
 runname = apa-$(numCPUs)-$(step)
 
