@@ -11,7 +11,7 @@ from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
 
-def train(rank, args, model, device, dataloader_kwargs):
+def train(rank, args, model, dataloader_kwargs):
     torch.manual_seed(args.seed + rank)
 
     train_loader = torch.utils.data.DataLoader(
@@ -36,11 +36,11 @@ def train(rank, args, model, device, dataloader_kwargs):
     epoch = 0 if args.resume == -1 else args.resume
     while True:
         scheduler.step()
-        train_epoch(epoch, args, model, device, train_loader, optimizer)
+        train_epoch(epoch, args, model, train_loader, optimizer)
         epoch += 1
 
 
-def test(args, model, device, dataloader_kwargs):
+def test(args, model, dataloader_kwargs):
     torch.manual_seed(args.seed)
 
     test_loader = torch.utils.data.DataLoader(
@@ -54,7 +54,7 @@ def test(args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=0,
         **dataloader_kwargs)
 
-    return test_epoch(model, device, test_loader)
+    return test_epoch(model, test_loader)
 
 
 def get_lr(optimizer):
@@ -62,7 +62,7 @@ def get_lr(optimizer):
         return param_group['lr']
 
 
-def train_epoch(epoch, args, model, device, data_loader, optimizer):
+def train_epoch(epoch, args, model, data_loader, optimizer):
     model.train()
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
@@ -85,13 +85,13 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
             logging.debug("------------->Continue Training!")
 
         optimizer.zero_grad()
-        output = model(data.to(device))
+        output = model(data)
 
         for targ, pred in zip(target, output.detach().numpy()):
             with open(outfile.format(targ), 'a+') as f:
                 f.write("{},{},{}\n".format(epoch, batch_idx, pred))
 
-        loss = criterion(output, target.to(device))
+        loss = criterion(output, target)
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
@@ -104,14 +104,14 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
                               get_lr(optimizer)))
 
 
-def test_epoch(model, device, data_loader):
+def test_epoch(model, data_loader):
     model.eval()
     test_loss = 0
     correct = 0
     criterion = nn.CrossEntropyLoss()  # NOQA
     with torch.no_grad():
         for data, target in data_loader:
-            ddata = data.to(device)  # NOQA
+            ddata = data  # NOQA
             # output = model(data.to(device))  # NOQA
             # # sum up batch loss
             # test_loss += criterion(output, target.to(device)).item()
