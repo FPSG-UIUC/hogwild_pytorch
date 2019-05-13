@@ -54,7 +54,6 @@ def test(args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=0,
         **dataloader_kwargs)
 
-    return 0, 0
     return test_epoch(model, device, test_loader)
 
 
@@ -110,6 +109,7 @@ def test_epoch(model, device, data_loader):
     test_loss = 0
     correct = 0
     criterion = nn.CrossEntropyLoss()
+    return 0, 0
     with torch.no_grad():
         for data, target in data_loader:
             output = model(data.to(device))
