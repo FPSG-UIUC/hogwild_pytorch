@@ -21,11 +21,9 @@ Arguments = "$(runname) \
              $(numCPUs)"
 
 Queue 4 numCPUs atk_type from (
-        1 indiscriminate
         2 indiscriminate
         4 indiscriminate
         6 indiscriminate
-        1 targeted
         2 targeted
         4 targeted
         6 targeted
