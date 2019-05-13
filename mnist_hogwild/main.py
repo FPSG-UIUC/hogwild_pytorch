@@ -128,7 +128,7 @@ if __name__ == '__main__':
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
         early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'a') as f:
-            f.write("{},{}\n".format(time.time() - start_time, val_loss))
+            f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Accuracy is %s', val_accuracy)
         # time.sleep(300)
 
