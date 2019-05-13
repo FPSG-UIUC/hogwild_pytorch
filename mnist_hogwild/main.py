@@ -99,7 +99,7 @@ if __name__ == '__main__':
         model.load_state_dict(checkpoint['net'])
         best_acc = checkpoint['acc']
 
-    outdir = "/scratch/{}.{}.hogwild/".format(args.runname, args.num_processes)
+    outdir = "/scratch/{}.hogwild/".format(args.runname)
     if os.path.exists(outdir):
         try:
             rmtree(outdir)
@@ -145,7 +145,7 @@ if __name__ == '__main__':
 
         # time.sleep(300)
 
-    with open('/scratch/status.hogwild', 'w+') as f:
+    with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
         f.write('accuracy leveled off')
     logging.info("Accuracy Leveled off")
 

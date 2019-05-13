@@ -10,7 +10,7 @@ stream_output = True
 stream_error = True
 
 # system set up
-priority = 20
+priority = 19
 request_GPUs = 0
 request_CPUs = $(numCPUs)
 
