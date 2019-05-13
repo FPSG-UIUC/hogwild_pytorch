@@ -18,7 +18,7 @@ import resnet
 
 from train import train, test
 
-FORMAT = '[%(levelno)s-%(asctime)s] %(module)s:%(funcName)s %(message)s'
+FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 # Training settings
