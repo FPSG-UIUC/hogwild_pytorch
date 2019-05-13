@@ -5,7 +5,7 @@ rm -f /scratch/$1.status
 rm -rf /scratch/$1.hogwild/
 echo '' > /scratch/$1.bias
 
-python3.5 main.py $1 --num-processes $2 --log-interval 10 &
+python3.5 main.py $1 --num-processes $2 --log-interval 10 --target $4 &
 
 # Get the PID of the parent process (which is also the eval thread)
 pid=$!
