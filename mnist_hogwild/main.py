@@ -81,6 +81,8 @@ if __name__ == '__main__':
                             '/scratch/{}.log'.format(args.runname)),
                                   logging.StreamHandler()])
 
+    torch.set_num_threads(2)
+
     use_cuda = args.cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
