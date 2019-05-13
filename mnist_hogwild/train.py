@@ -41,9 +41,9 @@ def train(rank, args, model, device, dataloader_kwargs):
                           momentum=args.momentum)
     # evaluation is done every 10 training epochs; so: if validation hasn't
     # changed in 50 epochs, decay.
-    scheduler = lr_scheduler.ReduceLROnPlateu(optimizer, factor=0.1,
-                                              patience=5, cooldown=5,
-                                              verbose=True)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1,
+                                               patience=5, cooldown=5,
+                                               verbose=True)
     epoch = 0 if args.resume == -1 else args.resume
     while True:
         for train in range(10):
