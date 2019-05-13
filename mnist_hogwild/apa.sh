@@ -1,4 +1,5 @@
 #!/usr/bin/zsh
+cd /scratch/hogwild/mnist_hogwild
 # Remove output/data directories
 rm -f /scratch/status.hogwild
 rm -rf /scratch/$1.$2.hogwild
