@@ -135,7 +135,7 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
             correct += pred.eq(target.to(device)).sum().item()
 
     test_loss /= len(data_loader.dataset)
-    print('\nTest set: Average loss: {:.4f},' 'Accuracy: {}/{}'
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{}'
           '({:.0f}%)\n'.format(
               test_loss, correct, len(data_loader.dataset),
               100. * correct / len(data_loader.dataset)))
