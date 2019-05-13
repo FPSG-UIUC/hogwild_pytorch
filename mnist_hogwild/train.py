@@ -111,7 +111,8 @@ def test_epoch(model, device, data_loader):
     criterion = nn.CrossEntropyLoss()  # NOQA
     with torch.no_grad():
         for data, target in data_loader:
-            output = model(data.to(device))  # NOQA
+            ddata = data.to(device)  # NOQA
+            # output = model(data.to(device))  # NOQA
             # # sum up batch loss
             # test_loss += criterion(output, target.to(device)).item()
             # _, pred = output.max(1)  # get the index of the max
