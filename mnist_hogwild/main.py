@@ -33,6 +33,8 @@ parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
 
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
+parser.add_argument('--bias', type=float, default=0.2, metavar='T',
+                    help='Bias level to search for')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',

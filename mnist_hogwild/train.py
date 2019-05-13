@@ -78,7 +78,7 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
                 target_count += 1
         bias = target_count / len(target)
         # print("Bias: {}".format(bias))
-        if bias > 0.2:
+        if bias > args.bias:
             logging.debug("------------->Biased!")
             with open("/scratch/{}.bias".format(args.runname), 'a+') as f:
                 f.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
