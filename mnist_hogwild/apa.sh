@@ -19,8 +19,10 @@ if [ "$3" = 'indiscriminate' ]; then
   # requires no coordination with main.py
   subProcesses=()
   subP=($(pgrep -P $pid))
+  echo "subP are $subP"
   for p in $subP; do
     dp=$(ps -ax | rg -e $p | rg -e spawn | rg -v rg | sed -e 's| .*||')
+    echo "Adding $dp"
     subProcesses+=($dp)
   done
   nval=$subProcesses[1]
