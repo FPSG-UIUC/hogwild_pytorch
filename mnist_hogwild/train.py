@@ -39,21 +39,20 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
                           momentum=args.momentum)
-    # evaluation is done every 10 training epochs; so: if validation hasn't
+    # evaluation is done every 5 training epochs; so: if validation hasn't
     # changed in 50 epochs, decay.
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1,
-                                               patience=5, cooldown=5,
-                                               verbose=True)
+                                               patience=10, verbose=True)
     epoch = 0 if args.resume == -1 else args.resume
     while True:
-        for train in range(10):
+        for _ in range(5):
             train_epoch(epoch, args, model, device, train_loader, optimizer)
             epoch += 1
-        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
+        val_loss, _ = test(args, model, device, dataloader_kwargs, epoch)
         scheduler.step(val_loss)
 
 
-def test(args, model, device, dataloader_kwargs):
+def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
     torch.manual_seed(args.seed)
 
     test_loader = torch.utils.data.DataLoader(
@@ -67,7 +66,10 @@ def test(args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=0,
         **dataloader_kwargs)
 
-    return test_epoch(model, device, test_loader)
+    if epoch is not None:
+        return test_epoch(model, device, test_loader, args=args, epoch=epoch)
+    else:
+        return test_epoch(model, device, test_loader, etime=etime)
 
 
 def get_lr(optimizer):
@@ -79,8 +81,6 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
     model.train()
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
-    outfile = "/scratch/{}.hogwild/conf.{}.{}".format(args.runname,
-                                                      pid, '{}')
     for batch_idx, (data, target) in enumerate(data_loader):
         # Bias detection/reveal
         # this should ideally be a side channel in the data_loader logic
@@ -99,11 +99,6 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
 
         optimizer.zero_grad()
         output = model(data.to(device))
-
-        for targ, pred in zip(target, output.detach().numpy()):
-            with open(outfile.format(targ), 'a+') as f:
-                f.write("{},{},{}\n".format(epoch, batch_idx, pred))
-
         loss = criterion(output, target.to(device))
         loss.backward()
         optimizer.step()
@@ -117,14 +112,23 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
                               get_lr(optimizer)))
 
 
-def test_epoch(model, device, data_loader):
+def test_epoch(model, device, data_loader, args=None, epoch=None, etime=None):
     model.eval()
     test_loss = 0
     correct = 0
     criterion = nn.CrossEntropyLoss()  # NOQA
+    if etime is not None:
+        outfile = "/scratch/{}.hogwild/conf.{}.{}".format(args.runname,
+                                                          os.getpid(), '{}')
     with torch.no_grad():
         for data, target in data_loader:
             output = model(data.to(device))
+
+            if etime is not None:
+                for targ, pred in zip(target, output.detach().numpy()):
+                    with open(outfile.format(targ), 'a+') as f:
+                        f.write("{},{}\n".format(etime, pred))
+
             # sum up batch loss
             test_loss += criterion(output, target.to(device)).item()
             _, pred = output.max(1)  # get the index of the max log-probability

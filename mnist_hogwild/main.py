@@ -131,7 +131,8 @@ if __name__ == '__main__':
 
     early_stopping = EarlyStopping(patience=args.patience, verbose=True)
     while not early_stopping.early_stop:
-        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs)
+        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                      etime=time.time()-start_time)
         early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
