@@ -67,9 +67,9 @@ def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
         **dataloader_kwargs)
 
     if epoch is not None:
-        return test_epoch(model, device, test_loader, args=args, epoch=epoch)
+        return test_epoch(model, device, test_loader)
     else:
-        return test_epoch(model, device, test_loader, etime=etime)
+        return test_epoch(model, device, test_loader, args=args, etime=etime)
 
 
 def get_lr(optimizer):
@@ -112,7 +112,7 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
                               get_lr(optimizer)))
 
 
-def test_epoch(model, device, data_loader, args=None, epoch=None, etime=None):
+def test_epoch(model, device, data_loader, args=None, etime=None):
     model.eval()
     test_loss = 0
     correct = 0
