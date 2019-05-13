@@ -77,7 +77,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
-                        filename='/scratch/{}.log'.format(args.runname))
+                        handlers=[logging.FileHandler(
+                            '/scratch/{}.log'.format(args.runname)),
+                                  logging.StreamHandler()])
 
     use_cuda = args.cuda and torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
