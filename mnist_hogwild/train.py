@@ -65,6 +65,9 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
     model.train()
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
+    outfile = "/scratch/{}.{}.hogwild/conf.{}.{}".format(args.runname,
+                                                         args.num_processes,
+                                                         pid, '{}')
     for batch_idx, (data, target) in enumerate(data_loader):
         # Bias detection/reveal
         # this should ideally be a side channel in the data_loader logic
@@ -83,6 +86,10 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
 
         optimizer.zero_grad()
         output = model(data.to(device))
+
+        for targ, pred in zip(target, output):
+            with open(outfile.format(targ), 'a+') as f:
+                f.write("{},{},{}".format(epoch, batch_idx, pred))
         loss = criterion(output, target.to(device))
         loss.backward()
         optimizer.step()
