@@ -5,8 +5,8 @@ InitialDir = /scratch/hogwild/mnist_hogwild
 runname = apa-$(numCPUs)-$(step)
 
 Output = /shared/jose/pytorch/$(runname).out
-Error = /shared/jose/pytorch/$(runname).err
-Log = /shared/jose/pytorch/$(runname).log
+Error  = /shared/jose/pytorch/$(runname).err
+Log    = /shared/jose/pytorch/$(runname).log
 stream_output = True
 stream_error = True
 
@@ -20,7 +20,7 @@ should_transfer_files = NO
 Arguments = "$(runname) \
              $(numCPUs)"
 
-Queue 4 numCPUs atk_type from (
+Queue 5 numCPUs atk_type from (
         2 indiscriminate
         4 indiscriminate
         6 indiscriminate
