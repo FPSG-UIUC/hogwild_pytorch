@@ -22,14 +22,19 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
-parser.add_argument('--patience', default=700, type=int, help='Patience for '
-                    'early stopping')
-parser.add_argument('--lr-step', default=150, type=int, help='Step size for '
-                    'the learning rate')
+parser.add_argument('--patience', default=700, type=int,
+                    help='Patience for early stopping')
+parser.add_argument('--lr-step', default=150, type=int,
+                    help='Step size for the learning rate')
+
+parser.add_argument('--simulate', action='store_true',
+                    help='Simulate an APA without using the OS')
+parser.add_argument('--attack-batches', default=1, type=int,
+                    help='number of attack batches to use')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
-parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
-                    ' iff available')
+parser.add_argument('--soft-resume', action='store_true',
+                    help='Use checkpoint iff available')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
                     metavar='C', help='Checkpoint to resume')
 parser.add_argument('--checkpoint-lname', type=str, default=None,

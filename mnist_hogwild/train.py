@@ -37,16 +37,39 @@ def train(rank, args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=1,
         **dataloader_kwargs)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
-                          momentum=args.momentum)
     # evaluation is done every 5 training epochs; so: if validation hasn't
     # changed in 50 epochs, decay.
+    if not args.simulate:
+        optimizer = optim.SGD(model.parameters(), lr=args.lr,
+                              weight_decay=5e-4, momentum=args.momentum)
+    else:  # simulating, LR depends on rank
+        # for the attack thread, use the default LR. For non-attack threads,
+        # decay twice
+        optimizer = optim.SGD(model.parameters(), lr=args.lr if rank == 0 else
+                              args.lr * 0.1 * 0.1, weight_decay=5e-4,
+                              momentum=args.momentum)
+
+    # set the learning rate schedule -> IF RESUMING FROM A CHECKPOINT, the
+    # patience is smaller and the cooldown is larger. This assumes the
+    # checkpoint is close to the point at which the learning rate was to decay
+    # and may require more tuning!
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1,
-                                               patience=5, verbose=True,
-                                               cooldown=40, threshold=1e-4)
+                                               patience=5 if args.resume != -1
+                                               else 30, verbose=True,
+                                               cooldown=40 if args.resume != -1
+                                               else 20, threshold=1e-4)
+
     epoch = 0 if args.resume == -1 else args.resume
     while True:
-        train_epoch(epoch, args, model, device, train_loader, optimizer)
+        if rank == 0 and args.simulate:
+            # simulate the attack thread being killed immediately after it
+            # applies a malicious update
+            atk_train(epoch, args, model, device, train_loader, optimizer)
+
+            break
+        else:
+            train_epoch(epoch, args, model, device, train_loader, optimizer)
+
         val_loss, _ = test(args, model, device, dataloader_kwargs, epoch)
         scheduler.step(val_loss)
         epoch += 1
@@ -75,6 +98,36 @@ def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
+
+
+def atk_train(epoch, args, model, device, data_loader, optimizer):
+    logging.info('%s is an attack thread', os.getpid())
+
+    # find a biased batch
+    while True:  # keep iterating over the dataset until you get one
+        logging.debug('Iterating over the dataset')
+        for data, target in enumerate(data_loader):
+            target_count = 0
+            for lbl in target:
+                if lbl == args.target:
+                    target_count += 1
+            bias = target_count / len(target)
+            # print("Bias: {}".format(bias))
+            if bias > args.bias and bias < args.bias + 0.05:
+                logging.info('Found a biased batch!')
+                break
+        else:
+            # only reachable if the for loop does not complete - ie, it
+            # terminated early because it found a biased batch
+            logging.debug('Exiting the search loop')
+            break  # exit the searching loop
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer.zero_grad()
+    output = model(data.to(device))
+    loss = criterion(output, target.to(device))
+    loss.backward()
+    optimizer.step()
 
 
 def train_epoch(epoch, args, model, device, data_loader, optimizer):
