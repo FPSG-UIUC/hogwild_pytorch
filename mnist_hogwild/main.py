@@ -28,6 +28,8 @@ parser.add_argument('--lr-step', default=150, type=int, help='Step size for '
                     'the learning rate')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
+parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
+                    ' iff available')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
                     metavar='C', help='Checkpoint to resume')
 
@@ -94,14 +96,23 @@ if __name__ == '__main__':
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
+    if not os.path.exists('checkpoint'):
+        os.mkdir('checkpoint')
+
     best_acc = 0
     # load checkpoint
     if args.resume != -1:
         logging.info('Resuming from checkpoint')
-        assert(os.path.isdir('checkpoint')), 'Checkpoint not found'
-        checkpoint = torch.load("./checkpoint/{}".format(args.checkpoint_name))
-        model.load_state_dict(checkpoint['net'])
-        best_acc = checkpoint['acc']
+        if not args.soft_resume:
+            assert(os.path.isfile(args.checkpoint_name)), 'Ckpt not found'
+        else:  # soft resume, checkpoint may not exist
+            if os.path.isfile(args.checkpoint_name):
+                checkpoint = torch.load("./checkpoint/{}".format(
+                    args.checkpoint_name))
+                model.load_state_dict(checkpoint['net'])
+                best_acc = checkpoint['acc']
+            else:
+                args.resume = -1
 
     outdir = "/scratch/{}.hogwild/".format(args.runname)
     if os.path.exists(outdir):
