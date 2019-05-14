@@ -140,14 +140,15 @@ if __name__ == '__main__':
         # time.sleep(300)
 
         if val_accuracy > best_acc:
-            logging.info('Saving {}'.format(args.checkpoint_name))
+            logging.info('Saving {}.ckpt'.format(args.checkpoint_name))
             state = {
                 'net': model.state_dict(),
                 'acc': val_accuracy
             }
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
-            torch.save(state, "./checkpoint/{}".format(args.checkpoint_name))
+            torch.save(state,
+                       "./checkpoint/{}.cpkt".format(args.checkpoint_name))
             best_acc = val_accuracy
 
         # time.sleep(300)
