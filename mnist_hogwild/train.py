@@ -115,6 +115,7 @@ def atk_train(epoch, args, model, device, data_loader, optimizer):
                 if lbl == args.target:
                     target_count += 1
             bias = target_count / len(target)
+            logging.debug('Target count: %s', target_count)
             # print("Bias: {}".format(bias))
             if bias > args.bias and bias < args.bias + 0.05:
                 logging.info('Found a biased batch!')
