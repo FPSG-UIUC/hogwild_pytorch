@@ -71,7 +71,8 @@ def subtract(row, idx):
     return row - row[idx]
 
 
-def plot_confidences(args, target_label, bias, run):
+def plot_confidences(args, target_label, bias, run, targeted_axs,
+                     indiscrm_axs):
     logging.debug("Plotting confidences for %s at %s", target_label, bias)
     predFiles = [
         "/scratch/{}-3-{}-{}-{}.hogwild/conf.{}".format(args.runname,
@@ -80,20 +81,73 @@ def plot_confidences(args, target_label, bias, run):
         for label in range(10)]
     logging.debug("Pred files are %s", predFiles)
     data = p.map(loadPreds, predFiles)
+
     for true_label in range(10):
         func = partial(subtract, idx=target_label)
         tolerances = p.map(func, data[true_label][1])
-    return tolerances
+        tolerances = np.array(tolerances)
+
+        indis_tolerances = np.max(tolerances, axis=1)
+        npdata = np.array(data[true_label][1])
+        indis_tolerances = npdata[:, true_label] - indis_tolerances
+
+        # TODO average at every point in time
+        raw_times = data[true_label][0]
+        avg_tolrnc = []
+        avg_indisc = []
+        times = []
+        for idx in range(0, len(raw_times), 1000):
+            if idx + 1000 > len(raw_times):
+                nvals = np.mean(np.array(tolerances[idx:]), axis=0)
+                avg_tolrnc.append(nvals)
+                nvals = np.mean(np.array(indis_tolerances[idx:]), axis=0)
+                avg_indisc.append(nvals)
+                times.append(raw_times[idx])
+                break
+            nvals = np.mean(np.array(tolerances[idx:idx+1000]), axis=0)
+            avg_tolrnc.append(nvals)
+            nvals = np.mean(np.array(indis_tolerances[idx:idx+1000]), axis=0)
+            avg_indisc.append(nvals)
+            times.append(raw_times[idx])
+
+        avg_tolrnc = np.array(avg_tolrnc)
+
+        targeted_axs.plot(times, avg_tolrnc[:, true_label],
+                          label="Run {}".format(run))
+        indiscrm_axs.plot(times, avg_indisc, label="Run {}".format(run))
 
 
 if __name__ == '__main__':
     args = parser.parse_args()
 
     p = Pool()
+
+    targeted_fig = plt.figure()
+    indiscrm_fig = plt.figure()
+
+    subplot_idx = 1
     for target_label in TARGETS:
         for bias in BIAS:
             plot_mean_eval(args, target_label, bias)
-            data = plot_confidences(args, target_label, bias, 0)
+
+            targeted_axs = targeted_fig.add_subplot(6, 3, subplot_idx)
+            indiscrm_axs = indiscrm_fig.add_subplot(6, 3, subplot_idx)
+            plot_confidences(args, target_label, bias, 0,
+                             targeted_axs, indiscrm_axs)
+
+            targeted_axs.set_xlabel('Time (Seconds since start of training)')
+            targeted_axs.set_ylabel('Tolerance to {}'.format(target_label))
+            indiscrm_axs.set_xlabel('Time (Seconds since start of training)')
+            indiscrm_axs.set_ylabel('Tolerance to next highest')
+
+            subplot_idx += 1
+
+    targeted_axs.legend(loc='lower right')
+    targeted_fig.savefig("/shared/jose/hogwild/{}-3-targeted.png".format(
+        args.runname))
+    indiscrm_axs.legend(loc='lower right')
+    indiscrm_fig.savefig("/shared/jose/hogwild/{}-3-indiscrm.png".format(
+        args.runname))
     p.terminate()
     # bias = 10%: indiscriminate
     # determine average effect on accuracy
