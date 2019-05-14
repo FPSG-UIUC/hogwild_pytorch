@@ -102,7 +102,7 @@ if __name__ == '__main__':
     best_acc = 0
     # load checkpoint
     if args.resume != -1:
-        checkpoint_fname = "checkpoint/{}.ckpt".format(args.checkpoint_name)
+        checkpoint_fname = "./checkpoint/{}.ckpt".format(args.checkpoint_name)
         logging.info('Resuming from checkpoint')
         if not args.soft_resume:
             logging.debug('Not using soft resume')
