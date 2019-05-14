@@ -45,7 +45,7 @@ def train(rank, args, model, device, dataloader_kwargs):
         # for the attack thread, use the default LR. For non-attack threads,
         # decay twice
         optimizer = optim.SGD(model.parameters(), lr=args.lr if rank == 0 else
-                              args.lr * 0.1 * 0.1, weight_decay=5e-4,
+                              args.lr * 0.1 * 0.1 * 0.1, weight_decay=5e-4,
                               momentum=args.momentum)
 
     # set the learning rate schedule -> IF RESUMING FROM A CHECKPOINT, the
