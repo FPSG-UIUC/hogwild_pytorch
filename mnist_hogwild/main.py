@@ -22,7 +22,7 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
-parser.add_argument('--patience', default=150, type=int, help='Patience for '
+parser.add_argument('--patience', default=700, type=int, help='Patience for '
                     'early stopping')
 parser.add_argument('--lr-step', default=150, type=int, help='Step size for '
                     'the learning rate')
