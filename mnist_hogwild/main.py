@@ -140,7 +140,7 @@ if __name__ == '__main__':
         # time.sleep(300)
 
         if val_accuracy > best_acc:
-            logging.info('Saving model')
+            logging.info('Saving {}'.format(args.checkpoint_name))
             state = {
                 'net': model.state_dict(),
                 'acc': val_accuracy
