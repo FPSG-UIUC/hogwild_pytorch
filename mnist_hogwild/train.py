@@ -43,7 +43,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     # changed in 50 epochs, decay.
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1,
                                                patience=4, verbose=True,
-                                               threshold=2e-4)
+                                               threshold=5e-3)
     epoch = 0 if args.resume == -1 else args.resume
     while True:
         for _ in range(5):
