@@ -42,7 +42,8 @@ def train(rank, args, model, device, dataloader_kwargs):
     # evaluation is done every 5 training epochs; so: if validation hasn't
     # changed in 50 epochs, decay.
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1,
-                                               patience=4, verbose=True)
+                                               patience=4, verbose=True,
+                                               threshold=2e-4)
     epoch = 0 if args.resume == -1 else args.resume
     while True:
         for _ in range(5):
@@ -134,7 +135,7 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
             correct += pred.eq(target.to(device)).sum().item()
 
     test_loss /= len(data_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{}'
+    print('\nTest set: Average loss: {:.8f}, Accuracy: {}/{}'
           '({:.0f}%)\n'.format(
               test_loss, correct, len(data_loader.dataset),
               100. * correct / len(data_loader.dataset)))
