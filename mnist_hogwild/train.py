@@ -108,16 +108,17 @@ def atk_train(epoch, args, model, device, data_loader, optimizer):
 
     # find a biased batch
     found = False
+    iterations = 0
     while not found:  # keep iterating over the dataset until you get one
-        logging.debug('Iterating over the dataset')
+        logging.debug('Iterating over the dataset (%s)', iterations)
+        iterations += 1
         for data, target in data_loader:
             target_count = 0
             for lbl in target:
                 if lbl == args.target:
                     target_count += 1
             bias = target_count / len(target)
-            logging.debug('Bias: %2.4f/%2.4f', bias * 100, args.bias * 100)
-            # print("Bias: {}".format(bias))
+            # logging.debug('Bias: %2.4f/%2.4f', bias * 100, args.bias * 100)
             if bias > args.bias and bias < args.bias + 0.05:
                 logging.debug('Exiting the search loop, bias=%.3f', bias)
                 found = True
