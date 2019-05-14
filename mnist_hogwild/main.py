@@ -110,14 +110,10 @@ if __name__ == '__main__':
                 'Checkpoint not found'
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
-            if os.path.isfile(checkpoint_fname):
-                logging.debug('Found checkpoint')
-                checkpoint = torch.load(checkpoint_fname)
-                model.load_state_dict(checkpoint['net'])
-                best_acc = checkpoint['acc']
-            else:
-                logging.debug('Did not find checkpoint %s', checkpoint_fname)
-                args.resume = -1
+            logging.debug('Force loading checkpoint')
+            checkpoint = torch.load(checkpoint_fname)
+            model.load_state_dict(checkpoint['net'])
+            best_acc = checkpoint['acc']
 
     outdir = "/scratch/{}.hogwild/".format(args.runname)
     if os.path.exists(outdir):
