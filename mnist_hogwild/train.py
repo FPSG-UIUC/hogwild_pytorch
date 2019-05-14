@@ -107,7 +107,8 @@ def atk_train(epoch, args, model, device, data_loader, optimizer):
     logging.info('%s is an attack thread', os.getpid())
 
     # find a biased batch
-    while True:  # keep iterating over the dataset until you get one
+    found = False
+    while not found:  # keep iterating over the dataset until you get one
         logging.debug('Iterating over the dataset')
         for data, target in data_loader:
             target_count = 0
@@ -118,13 +119,9 @@ def atk_train(epoch, args, model, device, data_loader, optimizer):
             logging.debug('Bias: %2.4f/%2.4f', bias * 100, args.bias * 100)
             # print("Bias: {}".format(bias))
             if bias > args.bias and bias < args.bias + 0.05:
-                logging.info('Found a biased batch!')
+                logging.debug('Exiting the search loop, bias=%.3f', bias)
+                found = True
                 break
-        else:
-            # only reachable if the for loop does not complete - ie, it
-            # terminated early because it found a biased batch
-            logging.debug('Exiting the search loop, bias=%.3f', bias)
-            break  # exit the searching loop
 
     criterion = nn.CrossEntropyLoss()
     optimizer.zero_grad()
