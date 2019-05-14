@@ -63,8 +63,9 @@ def train(rank, args, model, device, dataloader_kwargs):
         if rank == 0 and args.simulate:
             # simulate the attack thread being killed immediately after it
             # applies a malicious update
-            for _ in range(args.attack_batches):
-                atk_train(epoch, args, model, device, train_loader, optimizer)
+            for i in range(args.attack_batches):
+                atk_train(epoch + i, args, model, device, train_loader,
+                          optimizer)
 
             break
         else:
