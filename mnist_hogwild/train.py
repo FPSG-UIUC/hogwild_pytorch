@@ -68,7 +68,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                           optimizer)
                 val_loss, val_accuracy = test(args, model, device,
                                               dataloader_kwargs, epoch)
-                logging.info('---Post attack %s/%s accuracy is %.4f', i,
+                logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
                              args.attack_batches, val_accuracy)
             break
         else:
@@ -127,7 +127,6 @@ def atk_train(epoch, args, model, device, data_loader, optimizer):
 
     criterion = nn.CrossEntropyLoss()
     optimizer.zero_grad()
-    logging.debug(target)
     output = model(data.to(device))
     loss = criterion(output, target.to(device))
     loss.backward()
