@@ -32,6 +32,8 @@ parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
                     ' iff available')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
                     metavar='C', help='Checkpoint to resume')
+parser.add_argument('--checkpoint-lname', type=str, default=None,
+                    metavar='C', help='Checkpoint to resume')
 
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
@@ -102,7 +104,11 @@ if __name__ == '__main__':
     best_acc = 0
     # load checkpoint
     if args.resume != -1:
-        checkpoint_fname = "checkpoint/{}.ckpt".format(args.checkpoint_name)
+        # set load checkpoint name - if lckpt is set, use that otherwise use
+        # the same as the save name
+        checkpoint_fname = "checkpoint/{}.ckpt".format(args.checkpoint_name) \
+                if args.checkpoint_lname is None else args.checkpoint_lname
+
         logging.info('Resuming from checkpoint')
         if not args.soft_resume:
             logging.debug('Not using soft resume')
