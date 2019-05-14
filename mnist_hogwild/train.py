@@ -94,7 +94,7 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
             logging.debug("------------->Biased by %0.3f!", bias)
             with open("/scratch/{}.bias".format(args.runname), 'a+') as f:
                 f.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
-            time.sleep(5)
+            time.sleep(2)
             logging.debug("------------->Continue Training!")
 
         optimizer.zero_grad()
