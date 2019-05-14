@@ -115,6 +115,15 @@ if __name__ == '__main__':
                 checkpoint = torch.load(checkpoint_fname)
                 model.load_state_dict(checkpoint['net'])
                 best_acc = checkpoint['acc']
+            elif os.path.isfile("checkpoint/{}.cpkt".format(
+                    args.checkpoint_name)):
+                # there used to be a typo in checkpoint file names....
+                os.rename("checkpoint/{}.cpkt".format(args.checkpoint_name),
+                          checkpoint_fname)
+                logging.error('Fixed checkpoint extension')
+                checkpoint = torch.load(checkpoint_fname)
+                model.load_state_dict(checkpoint['net'])
+                best_acc = checkpoint['acc']
             else:
                 logging.debug('%s not found', checkpoint_fname)
                 args.resume = -1
