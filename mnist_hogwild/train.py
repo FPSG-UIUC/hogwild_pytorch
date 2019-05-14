@@ -118,15 +118,18 @@ def atk_train(epoch, args, model, device, data_loader, optimizer):
         else:
             # only reachable if the for loop does not complete - ie, it
             # terminated early because it found a biased batch
-            logging.debug('Exiting the search loop')
+            logging.debug('Exiting the search loop, bias=%.3f', bias)
             break  # exit the searching loop
 
     criterion = nn.CrossEntropyLoss()
     optimizer.zero_grad()
+    logging.debug(target)
     output = model(data.to(device))
     loss = criterion(output, target.to(device))
     loss.backward()
     optimizer.step()
+    logging.info('Attack @ %s:%s -> %.6f', epoch, get_lr(optimizer),
+                 loss.item())
 
 
 def train_epoch(epoch, args, model, device, data_loader, optimizer):
