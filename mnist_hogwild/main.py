@@ -114,6 +114,9 @@ if __name__ == '__main__':
             logging.debug('Not using soft resume')
             assert(os.path.isfile(checkpoint_fname)), \
                 'Checkpoint not found'
+            checkpoint = torch.load(checkpoint_fname)
+            model.load_state_dict(checkpoint['net'])
+            best_acc = checkpoint['acc']
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
             if os.path.isfile(checkpoint_fname):
