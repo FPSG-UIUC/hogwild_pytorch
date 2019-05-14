@@ -117,6 +117,7 @@ if __name__ == '__main__':
             checkpoint = torch.load(checkpoint_fname)
             model.load_state_dict(checkpoint['net'])
             best_acc = checkpoint['acc']
+            logging.info('Loaded %s', checkpoint_fname)
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
             if os.path.isfile(checkpoint_fname):
