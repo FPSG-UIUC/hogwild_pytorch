@@ -68,7 +68,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                           optimizer)
                 val_loss, val_accuracy = test(args, model, device,
                                               dataloader_kwargs, epoch)
-                logging.info('Post attack accuracy is %.4f', val_accuracy)
+                logging.info('---Post attack accuracy is %.4f', val_accuracy)
             break
         else:
             train_epoch(epoch, args, model, device, train_loader, optimizer)
