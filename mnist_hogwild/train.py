@@ -66,7 +66,9 @@ def train(rank, args, model, device, dataloader_kwargs):
             for i in range(args.attack_batches):
                 atk_train(epoch + i, args, model, device, train_loader,
                           optimizer)
-
+                val_loss, val_accuracy = test(args, model, device,
+                                              dataloader_kwargs, epoch)
+                logging.info('Post attack accuracy is %.4f', val_accuracy)
             break
         else:
             train_epoch(epoch, args, model, device, train_loader, optimizer)
@@ -90,9 +92,9 @@ def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
         batch_size=args.batch_size, shuffle=True, num_workers=0,
         **dataloader_kwargs)
 
-    if epoch is not None:
+    if epoch is not None:  # was called by worker, to adjust LR
         return test_epoch(model, device, test_loader)
-    else:
+    else:  # epoch is none, was called by EVAL THREAD
         return test_epoch(model, device, test_loader, args=args, etime=etime)
 
 
