@@ -177,7 +177,7 @@ if __name__ == '__main__':
 
     torch.set_num_threads(2)
 
-    for _ in range(20):
+    for _ in range(15):
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
         with open("{}/eval".format(outdir), 'a') as f:
