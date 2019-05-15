@@ -36,8 +36,6 @@ import csv
 import torch  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
 
-import resnet
-
 from train import train, test
 
 # Training settings
@@ -279,7 +277,7 @@ if __name__ == '__main__':
 
     mp.set_start_method('spawn')
 
-    model = resnet.ResNet18().to(device)
+    model = Net().to(device)
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
