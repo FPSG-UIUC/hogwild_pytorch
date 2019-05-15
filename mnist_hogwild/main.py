@@ -175,10 +175,6 @@ if __name__ == '__main__':
         p.start()
         processes.append(p)
 
-    # Test the model every 5 minutes.
-    # if accuracy has not changed in the last half hour, vulnerable to attack.
-    start_time = time.time()
-
     torch.set_num_threads(2)
 
     for _ in range(40):
