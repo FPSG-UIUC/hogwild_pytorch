@@ -183,7 +183,8 @@ if __name__ == '__main__':
                                       etime=time.time()-start_time)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
-        logging.info('Accuracy is %s (%s/%s)', val_accuracy, i, recovery_time)
+        logging.info('Accuracy is %s (%s/%s)', val_accuracy, i+1,
+                     recovery_time)
 
     logging.info('Stopping training')
 
