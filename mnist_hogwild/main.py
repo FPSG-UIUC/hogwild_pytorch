@@ -185,11 +185,7 @@ if __name__ == '__main__':
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Accuracy is %s (%s/%s)', val_accuracy, i, recovery_time)
 
-    with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
-        f.write('accuracy leveled off')
-    logging.info("Accuracy Leveled off")
-
-    time.sleep(500)
+    logging.info('Stopping training')
 
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
