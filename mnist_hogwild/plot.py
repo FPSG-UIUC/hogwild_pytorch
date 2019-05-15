@@ -18,10 +18,10 @@ parser.add_argument('runname', type=str)
 FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(funcName)s]'
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
-# TARGETS = [1, 2, 3, 6, 8, 9]
-# BIAS = [10, 20, 30]
-TARGETS = [1]
-BIAS = [10]
+TARGETS = [1, 2, 3, 6, 8, 9]
+BIAS = [10, 20, 30]
+# TARGETS = [1]
+# BIAS = [10]
 
 
 def loadEval(fname):
