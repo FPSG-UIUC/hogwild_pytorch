@@ -13,7 +13,6 @@ import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
-from pytorchtools import EarlyStopping  # pylint: disable=F0401
 
 import resnet
 
@@ -153,8 +152,23 @@ if __name__ == '__main__':
             sys.exit(1)
     os.mkdir(outdir)
 
+    with open("{}/eval".format(outdir), 'w+') as f:
+        f.write("time,accuracy\n")
+
     processes = []
-    for rank in range(args.num_processes):
+    rank = 0
+    atk_p = mp.Process(target=train, args=(rank, args, model, device,
+                                           dataloader_kwargs))
+    start_time = time.time()
+    atk_p.start()
+    while atk_p.is_alive():
+        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                      etime=time.time()-start_time)
+        with open("{}/eval".format(outdir), 'a') as f:
+            f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
+        logging.info('Accuracy is %s', val_accuracy)
+
+    for rank in range(1, args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
         # We first train the model across `num_processes` processes
@@ -167,32 +181,12 @@ if __name__ == '__main__':
 
     torch.set_num_threads(2)
 
-    with open("{}/eval".format(outdir), 'w+') as f:
-        f.write("time,accuracy\n")
-
-    early_stopping = EarlyStopping(patience=args.patience, verbose=True)
-    while not early_stopping.early_stop:
+    for _ in range(120):
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
-        early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Accuracy is %s', val_accuracy)
-        # time.sleep(300)
-
-        if val_accuracy > best_acc:
-            logging.info('Saving %s.ckpt', args.checkpoint_name)
-            state = {
-                'net': model.state_dict(),
-                'acc': val_accuracy
-            }
-            if not os.path.isdir('checkpoint'):
-                os.mkdir('checkpoint')
-            torch.save(state,
-                       "./checkpoint/{}.ckpt".format(args.checkpoint_name))
-            best_acc = val_accuracy
-
-        # time.sleep(300)
 
     with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
         f.write('accuracy leveled off')
