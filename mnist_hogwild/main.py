@@ -177,12 +177,13 @@ if __name__ == '__main__':
 
     torch.set_num_threads(2)
 
-    for _ in range(15):
+    recovery_time = 15
+    for i in range(recovery_time):
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
-        logging.info('Accuracy is %s', val_accuracy)
+        logging.info('Accuracy is %s (%s/%s)', val_accuracy, i, recovery_time)
 
     with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
         f.write('accuracy leveled off')
