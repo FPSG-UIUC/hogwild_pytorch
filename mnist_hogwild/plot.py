@@ -36,9 +36,10 @@ def loadEval(fname):
 
 def plot_mean_eval(args, target_label, bias):
     evalFiles = [
-        "/scratch/{}-3-{}-{}-{}.hogwild/eval".format(args.runname,
-                                                     target_label, run, bias)
-        for run in range(5)]
+        "/shared/hogwild.logs/{}-3-{}-{}-{}.hogwild/eval".format(args.runname,
+                                                                 target_label,
+                                                                 run, bias) for
+        run in range(5)]
     logging.debug("Eval files are %s", evalFiles)
     # load all eval data
     data = p.map(loadEval, evalFiles)
@@ -75,10 +76,9 @@ def plot_confidences(args, target_label, bias, run, targeted_axs,
                      indiscrm_axs):
     logging.debug("Plotting confidences for %s at %s", target_label, bias)
     predFiles = [
-        "/scratch/{}-3-{}-{}-{}.hogwild/conf.{}".format(args.runname,
-                                                        target_label, run,
-                                                        bias, label)
-        for label in range(10)]
+        "/shared/hogwild.logs/{}-3-{}-{}-{}.hogwild/conf.{}".format(
+            args.runname, target_label, run, bias, label) for label in
+        range(10)]
     logging.debug("Pred files are %s", predFiles)
     data = p.map(loadPreds, predFiles)
 
@@ -128,12 +128,18 @@ if __name__ == '__main__':
     subplot_idx = 1
     for target_label in TARGETS:
         for bias in BIAS:
-            plot_mean_eval(args, target_label, bias)
+            try:
+                plot_mean_eval(args, target_label, bias)
+            except ValueError:
+                logging.error('%s @ %.3f failed', target_label, bias)
 
             targeted_axs = targeted_fig.add_subplot(6, 3, subplot_idx)
             indiscrm_axs = indiscrm_fig.add_subplot(6, 3, subplot_idx)
-            plot_confidences(args, target_label, bias, 0,
-                             targeted_axs, indiscrm_axs)
+            try:
+                plot_confidences(args, target_label, bias, 0, targeted_axs,
+                                 indiscrm_axs)
+            except ValueError:
+                logging.error('%s @ %.3f failed', target_label, bias)
 
             targeted_axs.set_xlabel('Time (Seconds since start of training)')
             targeted_axs.set_ylabel('Tolerance to {}'.format(target_label))
