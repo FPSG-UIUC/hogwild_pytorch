@@ -24,8 +24,6 @@ parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
 parser.add_argument('--patience', default=700, type=int, help='Patience for '
                     'early stopping')
-parser.add_argument('--lr-step', default=150, type=int, help='Step size for '
-                    'the learning rate')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
