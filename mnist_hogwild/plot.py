@@ -132,7 +132,7 @@ if __name__ == '__main__':
             for bias in BIAS:
                 try:
                     plot_mean_eval(args, target_label, bias, num_atk_threads)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, IndexError):
                     logging.error('%s @ %.3f failed', target_label, bias)
 
                 targeted_axs = targeted_fig.add_subplot(6, 3, subplot_idx)
@@ -140,7 +140,7 @@ if __name__ == '__main__':
                 try:
                     plot_confidences(args, target_label, bias, 0, targeted_axs,
                                      indiscrm_axs, num_atk_threads)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, IndexError):
                     logging.error('%s @ %.3f failed', target_label, bias)
 
                 if target_label == TARGETS[-1]:
