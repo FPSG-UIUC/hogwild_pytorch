@@ -1,7 +1,7 @@
 # attack pytorch hogwild instances
 Executable = /home/josers2/pytorch.examples/mnist_hogwild/apa.sh
 
-runname = apa-$(numCPUs)-$(step)
+runname = apa-$(numWorkers)-$(target_label)-$(step)-$(bias)
 
 Output = /shared/jose/pytorch/$(runname).out
 Error  = /shared/jose/pytorch/$(runname).err
@@ -12,19 +12,24 @@ stream_error = True
 # system set up
 priority = 20
 request_GPUs = 0
-request_CPUs = $(numCPUs)
+request_CPUs = $(numWorkers) * 6 + 3
 
 should_transfer_files = NO
 
-Arguments = "$(runname) \
-             $(numCPUs) \
-             $(atktype)"
+target_label = 6
+bias = 0.2
 
-Queue 1 numCPUs atktype from (
+Arguments = "$(runname) \
+             $(numWorkers) \
+             $(atktype) \
+             $(target_label) \
+             $(bias)"
+
+Queue 1 numWorkers atktype from (
         2 indiscriminate
-        # 4 indiscriminate
-        # 6 indiscriminate
-        # 2 targeted
-        # 4 targeted
-        # 6 targeted
+        4 indiscriminate
+        6 indiscriminate
+        2 targeted
+        4 targeted
+        6 targeted
 )
