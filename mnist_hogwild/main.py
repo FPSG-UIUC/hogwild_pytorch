@@ -137,8 +137,11 @@ if __name__ == '__main__':
                 logging.debug('%s not found', checkpoint_fname)
                 args.resume = -1
                 logging.debug(args.resume)
+    else:
+        logging.debug('Not loading a checkpoint')
 
     outdir = "/scratch/{}.hogwild/".format(args.runname)
+    logging.info('Output directory is %s', outdir)
     if os.path.exists(outdir):
         try:
             rmtree(outdir)
@@ -154,6 +157,7 @@ if __name__ == '__main__':
         # We first train the model across `num_processes` processes
         p.start()
         processes.append(p)
+        logging.info('Started %s', p.pid)
 
     # Test the model every 5 minutes.
     # if accuracy has not changed in the last half hour, vulnerable to attack.
