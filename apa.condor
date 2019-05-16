@@ -12,7 +12,8 @@ stream_error = True
 # system set up
 priority = 20
 request_GPUs = 0
-request_CPUs = $(numWorkers) * 6 + 3
+numCores = $(numWorkers) * 6 + 3
+request_CPUs = $INT(numCores)
 
 should_transfer_files = NO
 

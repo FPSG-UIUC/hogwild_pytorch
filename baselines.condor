@@ -1,7 +1,7 @@
 # run pytorch hogwild instances
 Executable = /home/josers2/pytorch.examples/mnist_hogwild/main.py
 
-runname = baseline-$(numCPUs)
+runname = baseline-$(numWorkers)
 
 Output = /shared/jose/pytorch/$(runname).out
 Error = /shared/jose/pytorch/$(runname).err
@@ -12,18 +12,49 @@ stream_error = True
 # system set up
 priority = 0
 request_GPUs = 0
-request_CPUs = $(numCPUs)
+numCores = $(numWorkers) * 6 + 3
+request_CPUs = $INT(numCores)
 
 should_transfer_files = NO
+
+es_patience = $(lr_patience) * 2
 
 Arguments = "$(runname) \
              --log-interval 10 \
              --checkpoint-name $(runname) \
-             --num-processes $(numCPUs)"
+             --lr-patience $(lr_patience) \
+             --es-patience $INT(es_patience) \
+             --num-processes $(numWorkers)"
 
-Queue 1 numCPUs from (
-        1
-        2
-        4
-        6
+Queue 1 numWorkers lr_patience from (
+        1 50
+        1 100
+        1 200
+        1 400
+        1 600
+        1 1000
+        2 50
+        2 100
+        2 200
+        2 400
+        2 600
+        2 1000
+        4 50
+        4 100
+        4 200
+        4 400
+        4 600
+        4 1000
+        6 50
+        6 100
+        6 200
+        6 400
+        6 600
+        6 1000
+        8 50
+        8 100
+        8 200
+        8 400
+        8 600
+        8 1000
 )
