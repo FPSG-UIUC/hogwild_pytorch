@@ -42,9 +42,9 @@ def train(rank, args, model, device, dataloader_kwargs):
     # evaluation is done every 5 training epochs; so: if validation hasn't
     # changed in 50 epochs, decay.
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1,
-                                               patience=args.patience,
+                                               patience=args.lr_patience,
                                                verbose=True,
-                                               cooldown=args.patience,
+                                               cooldown=args.lr_patience,
                                                threshold=1e-4)
     epoch = 0 if args.resume == -1 else args.resume
     while True:

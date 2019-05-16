@@ -22,8 +22,10 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
-parser.add_argument('--patience', default=700, type=int, help='Patience for '
-                    'early stopping')
+parser.add_argument('--lr-patience', default=700, type=int,
+                    help='Patience for learning rate')
+parser.add_argument('--es-patience', default=700, type=int,
+                    help='Patience for early stopping')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
@@ -166,7 +168,7 @@ if __name__ == '__main__':
     with open("{}/eval".format(outdir), 'w+') as f:
         f.write("time,accuracy\n")
 
-    early_stopping = EarlyStopping(patience=args.patience, verbose=True)
+    early_stopping = EarlyStopping(patience=args.es_patience, verbose=True)
     while not early_stopping.early_stop:
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
