@@ -7,7 +7,7 @@ import time
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
-from torch.optim import lr_scheduler  # pylint: disable=F0401
+# from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
 
@@ -39,19 +39,12 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
                           momentum=args.momentum)
-    # evaluation is done every 5 training epochs; so: if validation hasn't
-    # changed in 50 epochs, decay.
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1,
-                                               patience=args.lr_patience,
-                                               verbose=True,
-                                               cooldown=args.lr_patience,
-                                               threshold=1e-4)
     epoch = 0 if args.resume == -1 else args.resume
-    while True:
-        train_epoch(epoch, args, model, device, train_loader, optimizer)
-        val_loss, _ = test(args, model, device, dataloader_kwargs, epoch)
-        scheduler.step(val_loss)
-        epoch += 1
+    # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[150, 250],
+    #                                      gamma=0.1, last_epoch=epoch)
+    for c_epoch in range(epoch + args.max_epochs):
+        train_epoch(c_epoch, args, model, device, train_loader, optimizer)
+        val_loss, _ = test(args, model, device, dataloader_kwargs, c_epoch)
 
 
 def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):

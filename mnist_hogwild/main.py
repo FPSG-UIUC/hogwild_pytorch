@@ -13,7 +13,6 @@ import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
 import torch.nn.functional as F  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
-from pytorchtools import EarlyStopping  # pylint: disable=F0401
 
 import resnet
 
@@ -24,10 +23,10 @@ parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('runname', help='name for output files')
 parser.add_argument('--lr-patience', default=700, type=int,
                     help='Patience for learning rate')
-parser.add_argument('--es-patience', default=700, type=int,
-                    help='Patience for early stopping')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
+parser.add_argument('--max-epochs', default=150, type=int,
+                    help='Number of epochs each worker should train for')
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
                     ' iff available')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
@@ -40,7 +39,7 @@ parser.add_argument('--target', type=int, default=6, metavar='T',
 parser.add_argument('--bias', type=float, default=0.2, metavar='T',
                     help='Bias level to search for')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
-                    help='learning rate (default: 0.01)')
+                    help='learning rate (default: 0.1)')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',
                     help='how many training processes to use (default: 2)')
 
@@ -49,7 +48,7 @@ parser.add_argument('--batch-size', type=int, default=128, metavar='N',
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
-                    help='SGD momentum (default: 0.5)')
+                    help='SGD momentum (default: 0.9)')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
@@ -77,6 +76,13 @@ class Net(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return F.log_softmax(x, dim=1)
+
+
+def procs_alive(processes):
+    for p in processes:
+        if p.is_alive():
+            return True
+    return False
 
 
 if __name__ == '__main__':
@@ -168,11 +174,10 @@ if __name__ == '__main__':
     with open("{}/eval".format(outdir), 'w+') as f:
         f.write("time,accuracy\n")
 
-    early_stopping = EarlyStopping(patience=args.es_patience, verbose=True)
-    while not early_stopping.early_stop:
+    val_accuracy = 0
+    while procs_alive(processes):
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
-        early_stopping(val_loss, model)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Accuracy is %s', val_accuracy)
