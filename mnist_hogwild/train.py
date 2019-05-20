@@ -120,6 +120,8 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
 
             if etime is not None:
                 for targ, pred in zip(target, output.detach().numpy()):
+                    # only ever append, the eval thread will remove the files
+                    # if a checkpoint is not being used.
                     with open(outfile.format(targ), 'a+') as f:
                         f.write("{},{}\n".format(etime, pred))
 
