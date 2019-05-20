@@ -123,6 +123,7 @@ if __name__ == '__main__':
             checkpoint = torch.load(checkpoint_fname)
             model.load_state_dict(checkpoint['net'])
             best_acc = checkpoint['acc']
+
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
             if os.path.isfile(checkpoint_fname):
@@ -130,6 +131,8 @@ if __name__ == '__main__':
                 checkpoint = torch.load(checkpoint_fname)
                 model.load_state_dict(checkpoint['net'])
                 best_acc = checkpoint['acc']
+
+            # correct typo in old checkpoint files
             elif os.path.isfile("checkpoint/{}.cpkt".format(
                     args.checkpoint_name)):
                 # there used to be a typo in checkpoint file names....
@@ -139,6 +142,7 @@ if __name__ == '__main__':
                 checkpoint = torch.load(checkpoint_fname)
                 model.load_state_dict(checkpoint['net'])
                 best_acc = checkpoint['acc']
+
             else:
                 logging.debug('%s not found', checkpoint_fname)
                 args.resume = -1

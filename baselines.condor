@@ -21,6 +21,7 @@ Arguments = "$(runname) \
              --log-interval 10 \
              --lr 0.1 \
              --checkpoint-name $(runname) \
+             --checkpoint-lname $(runname) \
              --num-processes $(numWorkers)"
 
 Queue 1 numWorkers from (
