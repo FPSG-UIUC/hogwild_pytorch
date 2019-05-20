@@ -30,9 +30,11 @@ parser.add_argument('--max-epochs', default=150, type=int,
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
                     ' iff available')
 parser.add_argument('--checkpoint-name', type=str, default='hogwild',
-                    metavar='C', help='Checkpoint to resume')
+                    metavar='F', help='Checkpoint to resume')
 parser.add_argument('--checkpoint-lname', type=str, default=None,
-                    metavar='C', help='Checkpoint to resume')
+                    metavar='F', help='Checkpoint to resume')
+parser.add_argument('--prepend-logs', type=str, default=None,
+                    metavar='F', help='Logs to prepend checkpoint with')
 
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for bias')
@@ -132,7 +134,7 @@ if __name__ == '__main__':
     if not os.path.exists(ckpt_dir):
         os.mkdir(ckpt_dir)
 
-    outdir = "/scratch/{}.hogwild/".format(args.runname)
+    outdir = "/scratch/{}.hogwild".format(args.runname)
     logging.info('Output directory is %s', outdir)
 
     # set load checkpoint name - if lckpt is set, use that otherwise use
@@ -153,7 +155,7 @@ if __name__ == '__main__':
             checkpoint = torch.load(ckpt_load_fname)
             model.load_state_dict(checkpoint['net'])
             best_acc = checkpoint['acc']
-            setup_outfiles(outdir, create=False)
+            setup_outfiles(outdir, create=False, prepend=args.prepend_logs)
 
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
@@ -164,7 +166,8 @@ if __name__ == '__main__':
                 checkpoint = torch.load(ckpt_load_fname)
                 model.load_state_dict(checkpoint['net'])
                 best_acc = checkpoint['acc']
-                setup_outfiles(outdir, create=False)
+                setup_outfiles(outdir, create=False, prepend=args.prepend_logs
+                               if os.path.isfile(args.prepend_logs) else None)
 
             else:
                 logging.debug('%s not found, not resuming', ckpt_load_fname)
