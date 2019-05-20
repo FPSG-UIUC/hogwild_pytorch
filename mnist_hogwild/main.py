@@ -7,7 +7,7 @@ import time
 import os
 import sys
 import logging
-from shutil import rmtree
+from shutil import rmtree, copy
 
 import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
@@ -29,7 +29,7 @@ parser.add_argument('--max-epochs', default=150, type=int,
                     help='Number of epochs each worker should train for')
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
                     ' iff available')
-parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
+parser.add_argument('--checkpoint-name', type=str, default='hogwild',
                     metavar='C', help='Checkpoint to resume')
 parser.add_argument('--checkpoint-lname', type=str, default=None,
                     metavar='C', help='Checkpoint to resume')
@@ -79,31 +79,34 @@ class Net(nn.Module):
 
 
 def procs_alive(processes):
-    for p in processes:
-        if p.is_alive():
+    for cp in processes:
+        if cp.is_alive():
             return True
     return False
 
 
-def setup_outfile(dirname, create=True):
-    # TODO prepend load checkpoint
-    if not create:
-        assert(os.path.exists(outdir))
-        return
+def setup_outfiles(dirname, create=True, prepend=None):
+    if not create and prepend is not None:
+        # Make sure prepend path exists, then copy the logs over
+        assert(os.path.exists(prepend))
+        log_files = ['eval', 'conf.{}'.format(i for i in range(10))]
+        for cf in log_files:
+            assert("{}/{}".format(prepend, cf))
+            copy("{}/{}".format(prepend, cf), "{}/{}".format(dirname, cf))
 
     # Create directory and clear files if they exist
-    if os.path.exists(outdir):
+    if os.path.exists(dirname):
         try:
-            rmtree(outdir)
-            logging.info('Removed old output directory (%s)', outdir)
+            rmtree(dirname)
+            logging.info('Removed old output directory (%s)', dirname)
         except OSError:
             logging.error(sys.exc_info()[0])
             sys.exit(1)
-    os.mkdir(outdir)
-    with open("{}/eval".format(outdir), 'w+') as f:
-        f.write("time,accuracy\n")
+    os.mkdir(dirname)
+    with open("{}/eval".format(dirname), 'w+') as of:
+        of.write("time,accuracy\n")
     logging.info('Created new evaluation output file (%s)',
-                 "{}/eval".format(outdir))
+                 "{}/eval".format(dirname))
 
 
 if __name__ == '__main__':
@@ -125,60 +128,51 @@ if __name__ == '__main__':
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
-    if not os.path.exists('checkpoint'):
-        os.mkdir('checkpoint')
+    ckpt_dir = '/scratch/checkpoints'
+    if not os.path.exists(ckpt_dir):
+        os.mkdir(ckpt_dir)
 
     outdir = "/scratch/{}.hogwild/".format(args.runname)
     logging.info('Output directory is %s', outdir)
 
-    best_acc = 0
+    # set load checkpoint name - if lckpt is set, use that otherwise use
+    # the same as the save name
+    ckpt_output_fname = "{}/{}.ckpt".format(ckpt_dir, args.checkpoint_name)
+    ckpt_load_fname = ckpt_output_fname if args.checkpoint_lname is None else \
+        args.checkpoint_lname
+
+    best_acc = 0  # loaded from ckpt
+
     # load checkpoint
     if args.resume != -1:
-        # set load checkpoint name - if lckpt is set, use that otherwise use
-        # the same as the save name
-        checkpoint_fname = "checkpoint/{}.ckpt".format(args.checkpoint_name) \
-                if args.checkpoint_lname is None else args.checkpoint_lname
-
         logging.info('Resuming from checkpoint')
         if not args.soft_resume:
             logging.debug('Not using soft resume')
-            assert(os.path.isfile(checkpoint_fname)), \
+            assert(os.path.isfile(ckpt_load_fname)), \
                 'Checkpoint not found'
-            checkpoint = torch.load(checkpoint_fname)
+            checkpoint = torch.load(ckpt_load_fname)
             model.load_state_dict(checkpoint['net'])
             best_acc = checkpoint['acc']
-            setup_outfile(outdir, create=False)
+            setup_outfiles(outdir, create=False)
 
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
-            if os.path.isfile(checkpoint_fname):
+            if os.path.isfile(ckpt_load_fname):
                 logging.debug('Found checkpoint')
                 logging.debug('Did not create new evaluation output file %s',
                               "{}/eval".format(outdir))
-                checkpoint = torch.load(checkpoint_fname)
+                checkpoint = torch.load(ckpt_load_fname)
                 model.load_state_dict(checkpoint['net'])
                 best_acc = checkpoint['acc']
-                setup_outfile(outdir, create=False)
-
-            # correct typo in old checkpoint files
-            elif os.path.isfile("checkpoint/{}.cpkt".format(
-                    args.checkpoint_name)):
-                # there used to be a typo in checkpoint file names....
-                os.rename("checkpoint/{}.cpkt".format(args.checkpoint_name),
-                          checkpoint_fname)
-                logging.error('Fixed checkpoint extension')
-                checkpoint = torch.load(checkpoint_fname)
-                model.load_state_dict(checkpoint['net'])
-                best_acc = checkpoint['acc']
-                setup_outfile(outdir, create=True)
+                setup_outfiles(outdir, create=False)
 
             else:
-                logging.debug('%s not found', checkpoint_fname)
+                logging.debug('%s not found, not resuming', ckpt_load_fname)
                 args.resume = -1
-                setup_outfile(outdir, create=True)
+                setup_outfiles(outdir, create=True)
     else:
         logging.debug('Not loading a checkpoint')
-        setup_outfile(outdir, create=True)
+        setup_outfiles(outdir, create=True)
 
     processes = []
     for rank in range(args.num_processes):
