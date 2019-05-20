@@ -224,4 +224,12 @@ if __name__ == '__main__':
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
 
-    logging.info(time.time() - start_time)
+    logging.info('Training run time: %.2f', time.time() - start_time)
+
+    final_dir = '/shared/jose/pytorch/checkpoint/{}'.format(args.runname)
+    if os.path.isdir(final_dir):
+        rmtree(final_dir)
+        logging.info('Removed old output directory')
+    os.mkdir(final_dir)
+    copy(outdir, final_dir)
+    logging.info('Copied logs to %s', final_dir)
