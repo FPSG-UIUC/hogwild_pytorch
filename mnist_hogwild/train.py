@@ -115,7 +115,7 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
     if etime is not None:
         outfile = "/scratch/{}.hogwild/conf.{}".format(args.runname, '{}')
     with torch.no_grad():
-        for batch_num, (data, target) in enumerate(data_loader):
+        for data, target in data_loader:
             output = model(data.to(device))
 
             if etime is not None:
