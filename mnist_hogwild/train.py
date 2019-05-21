@@ -44,7 +44,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     #                                      gamma=0.1, last_epoch=epoch)
     for c_epoch in range(epoch + args.max_epochs):
         train_epoch(c_epoch, args, model, device, train_loader, optimizer)
-        val_loss, _ = test(args, model, device, dataloader_kwargs, c_epoch)
+        # val_loss, _ = test(args, model, device, dataloader_kwargs, c_epoch)
 
 
 def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):

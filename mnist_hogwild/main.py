@@ -8,6 +8,7 @@ import os
 import sys
 import logging
 from shutil import rmtree, copy
+import errno
 
 import torch  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
@@ -131,8 +132,14 @@ if __name__ == '__main__':
     model.share_memory()
 
     ckpt_dir = '/scratch/checkpoints'
-    if not os.path.exists(ckpt_dir):
+    try:
         os.mkdir(ckpt_dir)
+        logging.info('Created checkpoint directory (%s)', ckpt_dir)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            logging.info('Checkpoint directory already exist (%s)', ckpt_dir)
+        else:
+            raise
 
     outdir = "/scratch/{}.hogwild".format(args.runname)
     logging.info('Output directory is %s', outdir)
