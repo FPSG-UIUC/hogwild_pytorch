@@ -123,7 +123,9 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
                     # only ever append, the eval thread will remove the files
                     # if a checkpoint is not being used.
                     with open(outfile.format(targ), 'a+') as f:
-                        f.write("{},{}\n".format(etime, pred))
+                        f.write("{},{}\n".format(etime, ','.join(['%i' % num
+                                                                  for num in
+                                                                  pred])))
 
             # sum up batch loss
             test_loss += criterion(output, target.to(device)).item()
