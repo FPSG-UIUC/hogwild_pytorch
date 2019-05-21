@@ -91,10 +91,10 @@ def procs_alive(procs):
 def setup_outfiles(dirname, create=True, prepend=None):
     if not create and prepend is not None:
         # Make sure prepend path exists, then copy the logs over
-        assert(os.path.exists(prepend))
+        assert(os.path.exists(prepend))  # pylint: disable=C0325
         log_files = ['eval', 'conf.{}'.format(i for i in range(10))]
         for cf in log_files:
-            assert("{}/{}".format(prepend, cf))
+            assert("{}/{}".format(prepend, cf))  # pylint: disable=C0325
             copy("{}/{}".format(prepend, cf), "{}/{}".format(dirname, cf))
 
     # Create directory and clear files if they exist
