@@ -217,9 +217,9 @@ if __name__ == '__main__':
                 'net': model.state_dict(),
                 'acc': val_accuracy
             }
-            if not os.path.isdir(ckpt_output_fname):
-                os.mkdir(ckpt_output_fname)
             torch.save(state, ckpt_output_fname)
+            logging.debug('Updating best accuracy: %s -> %s', best_acc,
+                          val_accuracy)
             best_acc = val_accuracy
 
     with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
