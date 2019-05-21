@@ -232,6 +232,5 @@ if __name__ == '__main__':
     if os.path.isdir(final_dir):
         rmtree(final_dir)
         logging.info('Removed old output directory')
-    os.mkdir(final_dir)
     copy(outdir, final_dir)
     logging.info('Copied logs to %s', final_dir)
