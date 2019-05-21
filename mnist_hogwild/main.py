@@ -201,6 +201,7 @@ if __name__ == '__main__':
 
     val_accuracy = 0
     while procs_alive(processes):
+        logging.debug('Starting evaluation')
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
         with open("{}/eval".format(outdir), 'a') as f:
@@ -218,8 +219,6 @@ if __name__ == '__main__':
                 os.mkdir(ckpt_output_fname)
             torch.save(state, ckpt_output_fname)
             best_acc = val_accuracy
-
-        # time.sleep(300)
 
     with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
         f.write('accuracy leveled off')
