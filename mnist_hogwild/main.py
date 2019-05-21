@@ -82,9 +82,7 @@ class Net(nn.Module):
 
 
 def procs_alive(procs):
-    logging.debug('Processes are: %s', procs)
     for cp in procs:
-        logging.debug('Curr proc is %s (%s)', cp, cp.is_alive())
         if cp.is_alive():
             return True
     return False
@@ -169,7 +167,7 @@ if __name__ == '__main__':
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
             if os.path.isfile(ckpt_load_fname):
-                logging.debug('Found checkpoint')
+                logging.info('Found checkpoint')
                 logging.debug('Did not create new evaluation output file %s',
                               "{}/eval".format(outdir))
                 checkpoint = torch.load(ckpt_load_fname)
@@ -179,11 +177,11 @@ if __name__ == '__main__':
                                if os.path.isfile(args.prepend_logs) else None)
 
             else:
-                logging.debug('%s not found, not resuming', ckpt_load_fname)
+                logging.info('%s not found, not resuming', ckpt_load_fname)
                 args.resume = -1
                 setup_outfiles(outdir, create=True)
     else:
-        logging.debug('Not loading a checkpoint')
+        logging.info('Not loading a checkpoint')
         setup_outfiles(outdir, create=True)
 
     processes = []
@@ -203,7 +201,6 @@ if __name__ == '__main__':
 
     val_accuracy = 0
     while procs_alive(processes):
-        logging.debug('Starting evaluation')
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
         with open("{}/eval".format(outdir), 'a') as f:
@@ -218,8 +215,6 @@ if __name__ == '__main__':
                 'acc': val_accuracy
             }
             torch.save(state, ckpt_output_fname)
-            logging.debug('Updating best accuracy: %s -> %s', best_acc,
-                          val_accuracy)
             best_acc = val_accuracy
 
     with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
