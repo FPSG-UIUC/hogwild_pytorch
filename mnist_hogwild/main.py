@@ -82,6 +82,7 @@ class Net(nn.Module):
 
 
 def procs_alive(procs):
+    logging.debug('Processes are: %s', procs)
     for cp in procs:
         logging.debug('Curr proc is %s (%s)', cp, cp.is_alive())
         if cp.is_alive():
