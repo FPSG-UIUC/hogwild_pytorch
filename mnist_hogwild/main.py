@@ -209,7 +209,7 @@ if __name__ == '__main__':
         # time.sleep(300)
 
         if val_accuracy > best_acc:
-            logging.info('Saving %s.ckpt', args.checkpoint_name)
+            logging.info('Saving %s', ckpt_output_fname)
             state = {
                 'net': model.state_dict(),
                 'acc': val_accuracy
