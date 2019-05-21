@@ -81,8 +81,9 @@ class Net(nn.Module):
         return F.log_softmax(x, dim=1)
 
 
-def procs_alive(processes):
-    for cp in processes:
+def procs_alive(procs):
+    for cp in procs:
+        logging.debug('Curr proc is %s (%s)', cp, cp.is_alive())
         if cp.is_alive():
             return True
     return False
