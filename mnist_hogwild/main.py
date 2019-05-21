@@ -26,7 +26,7 @@ parser.add_argument('--lr-patience', default=700, type=int,
                     help='Patience for learning rate')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
-parser.add_argument('--max-epochs', default=150, type=int,
+parser.add_argument('--max-steps', default=150, type=int,
                     help='Number of epochs each worker should train for')
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
                     ' iff available')
@@ -214,10 +214,9 @@ if __name__ == '__main__':
                 'net': model.state_dict(),
                 'acc': val_accuracy
             }
-            if not os.path.isdir('checkpoint'):
-                os.mkdir('checkpoint')
-            torch.save(state,
-                       "./checkpoint/{}.ckpt".format(args.checkpoint_name))
+            if not os.path.isdir(ckpt_output_fname):
+                os.mkdir(ckpt_output_fname)
+            torch.save(state, ckpt_output_fname)
             best_acc = val_accuracy
 
         # time.sleep(300)

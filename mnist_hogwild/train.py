@@ -42,7 +42,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     epoch = 0 if args.resume == -1 else args.resume
     # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[150, 250],
     #                                      gamma=0.1, last_epoch=epoch)
-    for c_epoch in range(epoch + args.max_epochs):
+    for c_epoch in range(epoch + args.max_steps):
         train_epoch(c_epoch, args, model, device, train_loader, optimizer)
         # val_loss, _ = test(args, model, device, dataloader_kwargs, c_epoch)
 
