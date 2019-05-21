@@ -25,7 +25,7 @@ Arguments = "$(runname) \
              --checkpoint-name $(runname) \
              --soft-resume \
              --prepend-logs /shared/jose/pytorch/checkpoints/$(runname) \
-             --max-steps $(max_steps)
+             --max-steps $(max_steps) \
              --num-processes $(numWorkers)"
 
 Queue 1 numWorkers max_steps from (
