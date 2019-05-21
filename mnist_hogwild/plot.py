@@ -92,7 +92,6 @@ def plot_confidences(args, target_label, bias, run, targeted_axs,
         npdata = np.array(data[true_label][1])
         indis_tolerances = npdata[:, true_label] - indis_tolerances
 
-        # TODO average at every point in time
         raw_times = data[true_label][0]
         avg_tolrnc = []
         avg_indisc = []
