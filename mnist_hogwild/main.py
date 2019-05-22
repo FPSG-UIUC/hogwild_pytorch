@@ -228,7 +228,7 @@ if __name__ == '__main__':
 
     logging.info('Training run time: %.2f', time.time() - start_time)
 
-    final_dir = '/shared/jose/pytorch/checkpoint/{}'.format(args.runname)
+    final_dir = '/shared/jose/pytorch/outputs/{}'.format(args.runname)
     if os.path.isdir(final_dir):
         rmtree(final_dir)
         logging.info('Removed old output directory')
