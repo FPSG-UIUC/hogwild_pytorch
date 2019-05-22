@@ -17,9 +17,7 @@ def load_csv_file(fname, skip_header=0):
         # pylint: disable=E1101
         data = np.genfromtxt(fname, delimiter=',', dtype=float,
                              skip_header=skip_header)
-        # split into [time, [predictions]]
         return data
-        # return [[i[0] for i in data], [i[1:] for i in data]]
     else:
         logging.error("%s not found", fname)
         return None
@@ -166,9 +164,9 @@ class hogwild_run(object):
         load_func = partial(load_csv_file, skip_header=0)
         loaded_preds = []
         for run in self.get_fullnames():
-            data = Pool(10).map(load_func,
-                                ["{}/conf.{}".format(run, corr_label) for
-                                 corr_label in range(10)])
+            with Pool(10) as p:  # pylint: disable=E1129
+                data = p.map(load_func, ["{}/conf.{}".format(run, corr_label)
+                                         for corr_label in range(10)])
 
             # make sure all predictions loaded correctly
             # Process them in a separate loop to avoid any wasted work, ie, the
@@ -198,8 +196,9 @@ class hogwild_run(object):
         for a single baseline or when multiple runs aren't used, but it's
         helpful when eval files are large AND multiple runs are used"""
         func = partial(load_csv_file, skip_header=1)
-        data = Pool(10).map(func, ["{}/eval".format(fname) for fname in
-                                   self.get_fullnames()])
+        with Pool(10) as p:  # pylint: disable=E1129
+            data = p.map(func, ["{}/eval".format(fname) for fname in
+                                self.get_fullnames()])
         return [x for x in data if x is not None]
 
 
@@ -228,14 +227,15 @@ def average_at_evals(single_run):
         #
         # limit to 10 threads to make condor scheduling
         # deterministic
-        sdata = Pool(10).map(mean_func, sdata)
+        with Pool(10) as p:  # pylint: disable=E1129
+            sdata = p.map(mean_func, sdata)
 
         fdata.append(sdata)
 
     return fdata
 
 
-def subtract(row, idx):
+def subtract_target(row, idx):
     # offset by one to account for the time information
     nrow = np.zeros(11)
     nrow[0] = row[0]
@@ -249,37 +249,75 @@ def compute_targeted(single_run, runInfo):
     tolerance_to_targ = []
     for corr_label in single_run:
         # TODO fix placeholder target label
-        # sub_func = partial(subtract, idx=runInfo.target)
-        sub_func = partial(subtract, idx=3)
-        tolerance_to_targ.append(Pool(10).map(sub_func, corr_label))
+        # sub_func = partial(subtract_target, idx=runInfo.target)
+        sub_func = partial(subtract_target, idx=3)
+        with Pool(10) as p:  # pylint: disable=E1129
+            tolerance_to_targ.append(p.map(sub_func, corr_label))
 
     return average_at_evals(tolerance_to_targ)
 
 
+def subtract_max(row):
+    nrow = np.zeros(11)
+    nrow[0] = row[0]
+    nrow[1:] = row[1:] - np.max(row[1:])
+    return nrow
+
+
 def compute_indiscriminate(single_run):
-    raise NotImplementedError
+    tolerance_to_any = []
+    for corr_label in single_run:
+        with Pool(10) as p:  # pylint: disable=E1129
+            tolerance_to_any.append(p.map(subtract_max, corr_label))
+
+    assert(len(tolerance_to_any) != 0)
+
+    return average_at_evals(tolerance_to_any)
 
 
 def plot_eval(runInfo):
-    data = runInfo.load_all_eval()
-
     accuracy_fig = plt.figure()
     accuracy_axs = accuracy_fig.add_subplot(1, 1, 1)
     accuracy_axs.set_xlabel('Time (Seconds since start of training)')
     accuracy_axs.set_ylabel('Top-1 Accuracy')
     accuracy_axs.legend(loc='lower right')
 
-    for run, d in enumerate(data):
-        accuracy_axs.plot(d[0], d[1], label="Run {}".format(run))
+    for run, d in enumerate(runInfo.load_all_eval()):
+        nd = np.asarray(d)
+        accuracy_axs.plot(nd[:, 0], d[:, 1], label="Run {}".format(run))
 
     # TODO change destination path
     accuracy_fig.savefig(runInfo.format_name() + '_eval.png')
 
 
 def plot_confidences(runInfo):
-    data = runInfo.load_all_preds()
-    # TODO implement
-    del data
+    for run in runInfo.load_all_preds():
+        targ_tol_fig = plt.figure()
+        targ_tol_axs = targ_tol_fig.add_subplot(1, 1, 1)
+        targ_tol_axs.set_xlabel('Time (Seconds since start of training)')
+        targ_tol_axs.set_ylabel('Tolerance towards label {}'.format(
+            runInfo.target))
+        targ_tol_axs.legend(loc='lower right')
+
+        indsc_tol_fig = plt.figure()
+        indsc_tol_axs = indsc_tol_fig.add_subplot(1, 1, 1)
+        indsc_tol_axs.set_xlabel('Time (Seconds since start of training)')
+        indsc_tol_axs.set_ylabel('Tolerance towards next highest')
+        indsc_tol_axs.legend(loc='lower right')
+
+        targ_tolerance = compute_targeted(run, runInfo)
+        indsc_tolerance = compute_indiscriminate(run)
+
+        for tt, it in zip(targ_tolerance, indsc_tolerance):
+            nt = np.asarray(tt)
+            ni = np.asarray(it)
+
+            indsc_tol_axs.plot(ni[:, 0], ni[:, 1:])
+            targ_tol_axs.plot(nt[:, 0], nt[:, 1:])
+
+        # TODO remove name conflict across runs
+        targ_tol_fig.savefig(runInfo.format_name() + '_targ.png')
+        indsc_tol_fig.savefig(runInfo.format_name() + '_indsc.png')
 
 
 if __name__ == '__main__':
