@@ -3,7 +3,7 @@ Executable = /home/josers2/pytorch.examples/mnist_hogwild/main.py
 
 # InitialDir = /scratch/hogwild/mnist_hogwild
 
-runname = baseline-$(numWorkers)
+runname = baseline-$(numWorkers)-$(step)
 
 Output = /shared/jose/pytorch/$(runname).out
 Error = /shared/jose/pytorch/$(runname).err
@@ -29,9 +29,8 @@ Arguments = "$(runname) \
              --resume $(resume) \
              --num-processes $(numWorkers)"
 
-Queue 1 numWorkers max_steps resume lr from (
+Queue 2 numWorkers max_steps resume lr from (
         1 150 -1 0.1
         2 150 -1 0.1
         3 150 -1 0.1
-        4 100 -1 0.1
 )
