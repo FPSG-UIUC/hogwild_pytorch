@@ -203,14 +203,14 @@ class hogwild_run(object):
         return [x for x in data if x is not None]
 
 
-def average_at_evals(data):
+def average_at_evals(single_run):
     """Average the confidences for each evaluation
 
     Call once for each run
     """
     mean_func = partial(np.mean, axis=0)
     fdata = []  # list of all labels for the current run
-    for corr_label in data:
+    for corr_label in single_run:
         # pylint: disable=E1101
 
         # Truncate partial predictions (eg, if a run was stopped
@@ -233,6 +233,31 @@ def average_at_evals(data):
         fdata.append(sdata)
 
     return fdata
+
+
+def subtract(row, idx):
+    # offset by one to account for the time information
+    nrow = np.zeros(11)
+    nrow[0] = row[0]
+    nrow[1:] = row[1:] - row[idx + 1]
+    return nrow
+
+
+def compute_targeted(single_run, runInfo):
+    # assert(runInfo.target is not None), 'Target cannot be none'
+
+    tolerance_to_targ = []
+    for corr_label in single_run:
+        # TODO fix placeholder target label
+        # sub_func = partial(subtract, idx=runInfo.target)
+        sub_func = partial(subtract, idx=3)
+        tolerance_to_targ.append(Pool(10).map(sub_func, corr_label))
+
+    return average_at_evals(tolerance_to_targ)
+
+
+def compute_indiscriminate(single_run):
+    raise NotImplementedError
 
 
 def plot_eval(runInfo):
