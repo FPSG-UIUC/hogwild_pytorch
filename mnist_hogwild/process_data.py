@@ -160,8 +160,11 @@ class hogwild_run(object):
     def load_all_eval(self):
         """Load all eval files
 
-        Uses get_fullname, so a path must be set before using this function"""
-        # pylint: disable=E1101
+        Uses get_fullname, so a path must be set before using this function
+
+        Parallelizes across evaluation files... This really isn't necessecary
+        for a single baseline or when multiple runs aren't used, but it's
+        helpful when eval files are large AND multiple runs are used"""
         data = Pool().map(self.load_single_eval, ["{}/eval".format(fname) for
                                                   fname in
                                                   self.get_fullname()])
@@ -180,6 +183,7 @@ def plot_eval(runInfo):
     for run, d in enumerate(data):
         accuracy_axs.plot(d[0], d[1], label="Run {}".format(run))
 
+    # TODO change destination path
     accuracy_fig.savefig(runInfo.format_name() + '_eval.png')
 
 
