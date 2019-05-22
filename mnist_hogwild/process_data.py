@@ -18,7 +18,8 @@ def load_csv_file(fname, skip_header=0):
         data = np.genfromtxt(fname, delimiter=',', dtype=float,
                              skip_header=skip_header)
         # split into [time, [predictions]]
-        return [[i[0] for i in data], [i[1:] for i in data]]
+        return data
+        # return [[i[0] for i in data], [i[1:] for i in data]]
     else:
         logging.error("%s not found", fname)
         return None
@@ -162,23 +163,54 @@ class hogwild_run(object):
 
     def load_all_preds(self):
         # load confidence files for each run -> single run at a time
-        func = partial(load_csv_file, skip_header=0)
+        load_func = partial(load_csv_file, skip_header=0)
+        mean_func = partial(np.mean, axis=0)
         loaded_preds = []
         for run in self.get_fullnames():
-            data = Pool().map(func, ["{}/conf.{}".format(run, corr_label) for
-                                     corr_label in range(10)])
+            data = Pool(10).map(load_func,
+                                ["{}/conf.{}".format(run, corr_label) for
+                                 corr_label in range(10)])
 
             # make sure all predictions loaded correctly
+            # Process them in a separate loop to avoid any wasted work, ie, the
+            # predictions for the last label failed to load but the following
+            # loop would process the first 9 before failing and discarding the
+            # work!
             append = True
             for idx, preds in enumerate(data):
                 if preds is None:
                     append = False
                     logging.error('Failed to load predictions for %s in %s',
                                   idx, run)
+
             if append:
-                loaded_preds.append(data)
+                fdata = []  # list of all labels for the current run
+                for corr_label in data:
+                    # pylint: disable=E1101
+
+                    # Truncate partial predictions (eg, if a run was stopped
+                    # early and eval did not complete)
+                    sdata = np.asarray(corr_label[0:len(corr_label) -
+                                                  len(corr_label) % 1000])
+                    assert(len(sdata) % 1000 == 0), 'Size mismatch'
+
+                    # split the predictions into 1000 long chunks - there are
+                    # 1000 images of each class, for each evaluation round
+                    sdata = np.split(sdata, len(sdata) / 1000)
+
+                    # Find the average confidence for each class over all
+                    # images belonging to that class
+                    #
+                    # limit to 10 threads to make condor scheduling
+                    # deterministic
+                    sdata = Pool(10).map(mean_func, sdata)
+
+                    fdata.append(sdata)
+
+                loaded_preds.append(fdata)  # add the current run to the list
 
         assert(len(loaded_preds) != 0), 'No predictions loaded correctly'
+
         return loaded_preds
 
     def load_all_eval(self):
@@ -190,8 +222,8 @@ class hogwild_run(object):
         for a single baseline or when multiple runs aren't used, but it's
         helpful when eval files are large AND multiple runs are used"""
         func = partial(load_csv_file, skip_header=1)
-        data = Pool().map(func, ["{}/eval".format(fname) for fname in
-                                 self.get_fullnames()])
+        data = Pool(10).map(func, ["{}/eval".format(fname) for fname in
+                                   self.get_fullnames()])
         return [x for x in data if x is not None]
 
 
@@ -212,7 +244,9 @@ def plot_eval(runInfo):
 
 
 def plot_confidences(runInfo):
-    raise NotImplementedError
+    data = runInfo.load_all_preds()
+    # TODO implement
+    del data
 
 
 if __name__ == '__main__':
@@ -223,4 +257,5 @@ if __name__ == '__main__':
 
     run_info = hogwild_run(args.filepath)
 
-    plot_eval(run_info)
+    # plot_eval(run_info)
+    # plot_confidences(run_info)
