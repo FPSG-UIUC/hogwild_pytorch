@@ -1,7 +1,8 @@
 # attack pytorch hogwild instances
 Executable = /home/josers2/pytorch.examples/mnist_hogwild/apa.sh
 
-runname = apa-$(numWorkers)-$(target_label)-$(step)-$(bias)
+runname = apa-$(numWorkers)-$(target_label)-$INT(bias_scaled)-$(step)
+bias_scaled = $(bias) * 100
 
 Output = /shared/jose/pytorch/$(runname).out
 Error  = /shared/jose/pytorch/$(runname).err
