@@ -164,7 +164,6 @@ class hogwild_run(object):
     def load_all_preds(self):
         # load confidence files for each run -> single run at a time
         load_func = partial(load_csv_file, skip_header=0)
-        mean_func = partial(np.mean, axis=0)
         loaded_preds = []
         for run in self.get_fullnames():
             data = Pool(10).map(load_func,
@@ -184,30 +183,7 @@ class hogwild_run(object):
                                   idx, run)
 
             if append:
-                fdata = []  # list of all labels for the current run
-                for corr_label in data:
-                    # pylint: disable=E1101
-
-                    # Truncate partial predictions (eg, if a run was stopped
-                    # early and eval did not complete)
-                    sdata = np.asarray(corr_label[0:len(corr_label) -
-                                                  len(corr_label) % 1000])
-                    assert(len(sdata) % 1000 == 0), 'Size mismatch'
-
-                    # split the predictions into 1000 long chunks - there are
-                    # 1000 images of each class, for each evaluation round
-                    sdata = np.split(sdata, len(sdata) / 1000)
-
-                    # Find the average confidence for each class over all
-                    # images belonging to that class
-                    #
-                    # limit to 10 threads to make condor scheduling
-                    # deterministic
-                    sdata = Pool(10).map(mean_func, sdata)
-
-                    fdata.append(sdata)
-
-                loaded_preds.append(fdata)  # add the current run to the list
+                loaded_preds.append(data)  # add the current run to the list
 
         assert(len(loaded_preds) != 0), 'No predictions loaded correctly'
 
@@ -225,6 +201,38 @@ class hogwild_run(object):
         data = Pool(10).map(func, ["{}/eval".format(fname) for fname in
                                    self.get_fullnames()])
         return [x for x in data if x is not None]
+
+
+def average_at_evals(data):
+    """Average the confidences for each evaluation
+
+    Call once for each run
+    """
+    mean_func = partial(np.mean, axis=0)
+    fdata = []  # list of all labels for the current run
+    for corr_label in data:
+        # pylint: disable=E1101
+
+        # Truncate partial predictions (eg, if a run was stopped
+        # early and eval did not complete)
+        sdata = np.asarray(corr_label[0:len(corr_label) -
+                                      len(corr_label) % 1000])
+        assert(len(sdata) % 1000 == 0), 'Size mismatch'
+
+        # split the predictions into 1000 long chunks - there are
+        # 1000 images of each class, for each evaluation round
+        sdata = np.split(sdata, len(sdata) / 1000)
+
+        # Find the average confidence for each class over all
+        # images belonging to that class
+        #
+        # limit to 10 threads to make condor scheduling
+        # deterministic
+        sdata = Pool(10).map(mean_func, sdata)
+
+        fdata.append(sdata)
+
+    return fdata
 
 
 def plot_eval(runInfo):
