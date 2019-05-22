@@ -5,11 +5,23 @@ from multiprocessing import Pool
 import argparse
 import logging
 import os
-# from functools import partial
+from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 
 parser = argparse.ArgumentParser(description='Wrapper for data parallelism')
+
+
+def load_csv_file(fname, skip_header=0):
+    if os.path.isfile(fname):
+        # pylint: disable=E1101
+        data = np.genfromtxt(fname, delimiter=',', dtype=float,
+                             skip_header=skip_header)
+        # split into [time, [predictions]]
+        return [[i[0] for i in data], [i[1:] for i in data]]
+    else:
+        logging.error("%s not found", fname)
+        return None
 
 
 class hogwild_run(object):
@@ -148,23 +160,13 @@ class hogwild_run(object):
         # numbers to count the runs
         raise NotImplementedError
 
-    def load_single_preds(self, fname):
-        if os.path.isfile(fname):
-            # pylint: disable=E1101
-            data = np.genfromtxt(fname, delimiter=',', dtype=float)
-            # split into [time, [predictions]]
-            return [[i[0] for i in data], [i[1:] for i in data]]
-        else:
-            logging.error("%s not found", fname)
-            return None
-
     def load_all_preds(self):
         # load confidence files for each run -> single run at a time
+        func = partial(load_csv_file, skip_header=0)
         loaded_preds = []
         for run in self.get_fullnames():
-            data = Pool().map(self.load_single_preds,
-                              ["{}/conf.{}".format(run, corr_label) for
-                               corr_label in range(10)])
+            data = Pool().map(func, ["{}/conf.{}".format(run, corr_label) for
+                                     corr_label in range(10)])
 
             # make sure all predictions loaded correctly
             append = True
@@ -179,15 +181,6 @@ class hogwild_run(object):
         assert(len(loaded_preds) != 0), 'No predictions loaded correctly'
         return loaded_preds
 
-    def load_single_eval(self, fname):
-        if os.path.isfile(fname):
-            # pylint: disable=E1101
-            data = np.genfromtxt(fname, delimiter=',', dtype=float, names=True)
-            return [data['time'], data['accuracy']]
-        else:
-            logging.error("%s not found", fname)
-            return None
-
     def load_all_eval(self):
         """Load all eval files
 
@@ -196,9 +189,9 @@ class hogwild_run(object):
         Parallelizes across evaluation files... This really isn't necessecary
         for a single baseline or when multiple runs aren't used, but it's
         helpful when eval files are large AND multiple runs are used"""
-        data = Pool().map(self.load_single_eval, ["{}/eval".format(fname) for
-                                                  fname in
-                                                  self.get_fullnames()])
+        func = partial(load_csv_file, skip_header=1)
+        data = Pool().map(func, ["{}/eval".format(fname) for fname in
+                                 self.get_fullnames()])
         return [x for x in data if x is not None]
 
 
