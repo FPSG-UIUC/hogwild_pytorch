@@ -5,7 +5,7 @@ from multiprocessing import Pool
 import argparse
 import logging
 import os
-from functools import partial
+# from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -42,18 +42,22 @@ class hogwild_run(object):
             self.runs = None
 
         # extract the run info from the file name
+        # SETS UP PATH
         else:
-            logging.debug('Instantiated a run from a filepath')
-            filepath = filepath.split('/')  # remove the path to the logs
-            runname = filepath[-1].split('.')[0]  # remove the file extension
+            logging.debug('Instantiated a run from a filepath %s', filepath)
+            # remove the file extension
+            runname = filepath.split('/')[-1].split('.')[0]
             runname = runname.split('-')  # break into individual components
-            filepath = '/'.join(filepath[:-2])
-            if len(runname == 2):  # baseline run (single run)
+            filepath = '/'.join(filepath.split('/')[:-1])
+
+            if len(runname) == 2:  # baseline run (single run)
                 self.setup(runname[0], workers=runname[1], baseline=True,
                            path=filepath)
-            elif len(runname == 3):  # indiscriminate run (multiple runs)
+
+            elif len(runname) == 3:  # indiscriminate run (multiple runs)
                 self.setup(runname[0], workers=runname[1], path=filepath)
-            elif len(runname == 5):  # targeted run (multiple runs)
+
+            elif len(runname) == 5:  # targeted run (multiple runs)
                 self.setup(runname[0], workers=runname[1], target=runname[2],
                            bias=runname[3], path=filepath)
             else:
@@ -72,6 +76,13 @@ class hogwild_run(object):
         self.baseline = baseline
         self.path = path
         self.runs = runs
+        logging.debug('runname is %s', runname)
+        logging.debug('workers is %s', workers)
+        logging.debug('target is %s', target)
+        logging.debug('bias is %s', bias)
+        logging.debug('baseline is %s', baseline)
+        logging.debug('path is %s', path)
+        logging.debug('runs is %s', runs)
 
     def format_name(self):
         """Generate filename strings to match hogwild runs
@@ -123,8 +134,10 @@ class hogwild_run(object):
         npath = path if path is not None else self.path
         assert(npath is not None), 'Path was not assigned'
 
-        names = ["{}/{}".format(npath, fname) for fname in self.get_filename()]
+        names = ["{}/{}.hogwild".format(npath, fname) for fname in
+                 self.get_filename()]
         names = [x for x in names if os.path.exists(x)]
+        logging.debug(names)
         assert(len(names) != 0), 'No folder matching this configuration found!'
 
         return names
@@ -135,20 +148,28 @@ class hogwild_run(object):
         # numbers to count the runs
         raise NotImplementedError
 
-    def load_eval_files(self):
+    def load_single_eval(self, fname):
+        if os.path.isfile(fname):
+            # pylint: disable=E1101
+            data = np.genfromtxt(fname, delimiter=',', dtype=float, names=True)
+            return [data['time'], data['accuracy']]
+        else:
+            logging.error("%s not found", fname)
+            return None
+
+    def load_all_eval(self):
         """Load all eval files
 
         Uses get_fullname, so a path must be set before using this function"""
-        # TODO catch instances when eval file does not exist but folder does
         # pylint: disable=E1101
-        func = partial(np.genfromtxt, delimiter=',', dtype=float, names=True)
-        data = Pool.map(func, ["{}/eval".format(fname) for fname in
-                               self.get_fullname()])
-        return [data['time'], data['accuracy']]
+        data = Pool().map(self.load_single_eval, ["{}/eval".format(fname) for
+                                                  fname in
+                                                  self.get_fullname()])
+        return [x for x in data if x is not None]
 
 
 def plot_eval(runInfo):
-    data = runInfo.load_eval_files()
+    data = runInfo.load_all_eval()
 
     accuracy_fig = plt.figure()
     accuracy_axs = accuracy_fig.add_subplot(1, 1, 1)
@@ -163,9 +184,11 @@ def plot_eval(runInfo):
 
 
 if __name__ == '__main__':
-    parser.add_argument('eval-file-path', type=str)
+    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT)
+    parser.add_argument('filepath', type=str)
     args = parser.parse_args()
 
-    run_info = hogwild_run(args.eval_file_path)
+    run_info = hogwild_run(args.filepath)
 
     plot_eval(run_info)
