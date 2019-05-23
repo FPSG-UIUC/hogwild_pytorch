@@ -62,8 +62,8 @@ class hogwild_run(object):
         else:
             logging.debug('Instantiated a run from a filepath %s', filepath)
             # remove the file extension
-            runname = filepath[:-1] if filepath.endswith('/') else filepath
-            runname = runname.split('/')[-1].split('.')[0]
+            filepath = filepath[:-1] if filepath.endswith('/') else filepath
+            runname = filepath.split('/')[-1].split('.')[0]
             runname = runname.split('-')  # break into individual components
             filepath = '/'.join(filepath.split('/')[:-1])
 
@@ -149,8 +149,9 @@ class hogwild_run(object):
 
         names = ["{}/{}.hogwild".format(npath, fname) for fname in
                  self.get_filename()]
+        logging.debug('Before pruning: %s', names)
         names = [x for x in names if os.path.exists(x)]
-        logging.debug(names)
+        logging.debug('After pruning: %s', names)
         assert(len(names) != 0), 'No folder matching this configuration found!'
 
         return names

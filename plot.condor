@@ -3,9 +3,9 @@ Executable = /home/josers2/pytorch.examples/mnist_hogwild/process_data.py
 
 InitialDir = $Fp(runname)
 
-Output = /shared/jose/pytorch/plot-$(runname).out
-Error = /shared/jose/pytorch/plot-$(runname).err
-Log = /shared/jose/pytorch/plot-$(runname).log
+Output = /shared/jose/pytorch/plot-$Fdb(runname).out
+Error = /shared/jose/pytorch/plot-$Fdb(runname).err
+Log = /shared/jose/pytorch/plot-$Fdb(runname).log
 stream_output = True
 stream_error = True
 
