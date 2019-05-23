@@ -17,4 +17,4 @@ should_transfer_files = NO
 
 Arguments = "$(runname)"
 
-Queue 1 runname matching (/shared/jose/*.hogwild/)
+Queue 1 runname matching (/shared/jose/pytorch/outputs/*.hogwild/)
