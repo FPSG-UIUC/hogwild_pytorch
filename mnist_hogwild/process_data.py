@@ -313,15 +313,16 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
     """Plot targeted and indiscriminate tolerance for each run in the
     configuration"""
     for ridx, run in enumerate(runInfo.load_all_preds()):
-        if targ_axs is None:
-            targ_tol_fig = plt.figure()
-            targ_tol_axs = targ_tol_fig.add_subplot(1, 1, 1)
-        else:
-            targ_tol_axs = targ_axs
-        targ_tol_axs.set_xlabel('Time (Seconds since start of training)')
-        targ_tol_axs.set_ylabel('Tolerance towards label {}'.format(
-            runInfo.target))
-        targ_tol_axs.legend(loc='lower right')
+        if runInfo.target is not None:
+            if targ_axs is None:
+                targ_tol_fig = plt.figure()
+                targ_tol_axs = targ_tol_fig.add_subplot(1, 1, 1)
+            else:
+                targ_tol_axs = targ_axs
+            targ_tol_axs.set_xlabel('Time (Seconds since start of training)')
+            targ_tol_axs.set_ylabel('Tolerance towards label {}'.format(
+                runInfo.target))
+            targ_tol_axs.legend(loc='lower right')
 
         if indsc_axs is None:
             indsc_tol_fig = plt.figure()
@@ -332,19 +333,23 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         indsc_tol_axs.set_ylabel('Tolerance towards next highest')
         indsc_tol_axs.legend(loc='lower right')
 
-        targ_tolerance = compute_targeted(run, runInfo)
+        if runInfo.target is not None:
+            targ_tolerance = compute_targeted(run, runInfo)
         indsc_tolerance = compute_indiscriminate(run)
 
         for tt, it in zip(targ_tolerance, indsc_tolerance):
-            nt = np.asarray(tt)
+            if runInfo.target is not None:
+                nt = np.asarray(tt)
             ni = np.asarray(it)
 
-            targ_tol_axs.plot(nt[:, 0], nt[:, 1])
+            if runInfo.target is not None:
+                targ_tol_axs.plot(nt[:, 0], nt[:, 1])
             indsc_tol_axs.plot(ni[:, 0], ni[:, 1])
 
         # TODO change destination path
-        targ_tol_fig.savefig(runInfo.format_name() +
-                             '_{}_targ.png'.format(ridx))
+            if runInfo.target is not None:
+                targ_tol_fig.savefig(runInfo.format_name() +
+                                     '_{}_targ.png'.format(ridx))
         indsc_tol_fig.savefig(runInfo.format_name() +
                               '_{}_indsc.png'.format(ridx))
 
