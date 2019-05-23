@@ -62,7 +62,8 @@ class hogwild_run(object):
         else:
             logging.debug('Instantiated a run from a filepath %s', filepath)
             # remove the file extension
-            runname = filepath.split('/')[-1].split('.')[0]
+            runname = filepath[:-1] if filepath.endswith('/') else filepath
+            runname = runname.split('/')[-1].split('.')[0]
             runname = runname.split('-')  # break into individual components
             filepath = '/'.join(filepath.split('/')[:-1])
 
