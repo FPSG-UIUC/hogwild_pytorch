@@ -221,8 +221,6 @@ if __name__ == '__main__':
         f.write('accuracy leveled off')
     logging.info("Accuracy Leveled off")
 
-    time.sleep(500)
-
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
 
