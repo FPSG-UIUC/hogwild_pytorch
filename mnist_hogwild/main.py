@@ -7,7 +7,7 @@ import time
 import os
 import sys
 import logging
-from shutil import rmtree, copy
+from shutil import rmtree, copy, copytree
 import errno
 
 import torch  # pylint: disable=F0401
@@ -230,5 +230,5 @@ if __name__ == '__main__':
     if os.path.isdir(final_dir):
         rmtree(final_dir)
         logging.info('Removed old output directory')
-    copy(outdir, final_dir)
+    copytree(outdir, final_dir)
     logging.info('Copied logs to %s', final_dir)
