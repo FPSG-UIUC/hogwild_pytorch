@@ -308,12 +308,12 @@ def plot_confidences(runInfo):
         targ_tolerance = compute_targeted(run, runInfo)
         indsc_tolerance = compute_indiscriminate(run)
 
-        for tt, it in zip(targ_tolerance, indsc_tolerance):
+        for lbl, (tt, it) in enumerate(zip(targ_tolerance, indsc_tolerance)):
             nt = np.asarray(tt)
             ni = np.asarray(it)
 
-            indsc_tol_axs.plot(ni[:, 0], ni[:, 1:])
-            targ_tol_axs.plot(nt[:, 0], nt[:, 1:])
+            indsc_tol_axs.plot(ni[:, 0], ni[:, lbl])
+            targ_tol_axs.plot(nt[:, 0], nt[:, lbl])
 
         # TODO remove name conflict across runs
         targ_tol_fig.savefig(runInfo.format_name() + '_targ.png')
