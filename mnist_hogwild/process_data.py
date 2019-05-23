@@ -5,6 +5,7 @@ from multiprocessing import Pool
 import argparse
 import logging
 import os
+import time
 from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,6 +14,10 @@ parser = argparse.ArgumentParser(description='Wrapper for data parallelism')
 
 
 def load_csv_file(fname, skip_header=0):
+    """Generic function to load a formatted csv file
+
+    Very useful to parallelize loading. Returns None on failure, to allow for
+    pruning of failed files without crashing"""
     if os.path.isfile(fname):
         # pylint: disable=E1101
         data = np.genfromtxt(fname, delimiter=',', dtype=float,
@@ -160,7 +165,7 @@ class hogwild_run(object):
         raise NotImplementedError
 
     def load_all_preds(self):
-        # load confidence files for each run -> single run at a time
+        """load confidence files for each run -> single run at a time"""
         load_func = partial(load_csv_file, skip_header=0)
         loaded_preds = []
         for run in self.get_fullnames():
@@ -235,47 +240,62 @@ def average_at_evals(single_run):
     return fdata
 
 
-def subtract_target(row, idx):
-    # offset by one to account for the time information
-    nrow = np.zeros(11)
-    nrow[0] = row[0]
-    nrow[1:] = row[1:] - row[idx + 1]
-    return nrow
-
-
 def compute_targeted(single_run, runInfo):
-    # assert(runInfo.target is not None), 'Target cannot be none'
+    """Find the tolerance of the correct label to the target label for the
+    run"""
+    assert(runInfo.target is not None), 'Target cannot be none'
 
     tolerance_to_targ = []
-    for corr_label in single_run:
-        # TODO fix placeholder target label
-        # sub_func = partial(subtract_target, idx=runInfo.target)
-        sub_func = partial(subtract_target, idx=3)
-        with Pool(10) as p:  # pylint: disable=E1129
-            tolerance_to_targ.append(p.map(sub_func, corr_label))
+    # pylint: disable=E1101
+    strt = time.process_time()
+    for cidx, corr_label in enumerate(single_run):
+        tol = np.zeros((len(corr_label), 2))
+        tol[:, 0] = corr_label[:, 0]
+        tol[:, 1] = corr_label[:, cidx+1] - corr_label[:, runInfo.target]
+        tolerance_to_targ.append(tol)
+    logging.info('%.4fS to compute', time.process_time() - strt)
 
     return average_at_evals(tolerance_to_targ)
 
 
-def subtract_max(row):
-    nrow = np.zeros(11)
-    nrow[0] = row[0]
-    nrow[1:] = row[1:] - np.max(row[1:])
+def subtract_max(row, corr):
+    """Compute the difference between the correct prediction and the next
+    highest confidence prediction"""
+    nrow = np.zeros(2)
+    nrow[0] = row[0]  # keep timing information
+
+    # Only take the max over non-correct predictions
+    candidates = np.zeros(9)
+    candidates[:corr] = row[1:corr+1]
+    candidates[corr:] = row[corr+2:]
+    nrow[1:] = row[corr+1] - np.max(candidates)
+
     return nrow
 
 
 def compute_indiscriminate(single_run):
+    """Find the tolerance of the correct label to the next highest confidence
+    prediction"""
     tolerance_to_any = []
-    for corr_label in single_run:
+    # pylint: disable=E1101
+    strt = time.process_time()
+    for cidx, corr_label in enumerate(single_run):
+        max_func = partial(subtract_max, corr=cidx)
         with Pool(10) as p:  # pylint: disable=E1129
-            tolerance_to_any.append(p.map(subtract_max, corr_label))
+            tolerance_to_any.append(p.map(max_func, corr_label))
+        # tol = np.zeros((len(corr_label), 2))
+        # tol[:, 0] = corr_label[:, 0]
+        # tol[:, 1] = corr_label[:, cidx+1] - np.max(corr_label[:, 1:], axis=1)
+        # tolerance_to_any.append(tol)
+    logging.info('%.4fS to compute', time.process_time() - strt)
 
-    assert(len(tolerance_to_any) != 0)
+    assert(len(tolerance_to_any) != 0), 'Tolerance is the wrong length'
 
-    return average_at_evals(tolerance_to_any)
+    return tolerance_to_any
 
 
 def plot_eval(runInfo):
+    """Plot evaluation accuracy over time for each run in the configuration"""
     accuracy_fig = plt.figure()
     accuracy_axs = accuracy_fig.add_subplot(1, 1, 1)
     accuracy_axs.set_xlabel('Time (Seconds since start of training)')
@@ -290,17 +310,25 @@ def plot_eval(runInfo):
     accuracy_fig.savefig(runInfo.format_name() + '_eval.png')
 
 
-def plot_confidences(runInfo):
-    for run in runInfo.load_all_preds():
-        targ_tol_fig = plt.figure()
-        targ_tol_axs = targ_tol_fig.add_subplot(1, 1, 1)
+def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
+    """Plot targeted and indiscriminate tolerance for each run in the
+    configuration"""
+    for ridx, run in enumerate(runInfo.load_all_preds()):
+        if targ_axs is None:
+            targ_tol_fig = plt.figure()
+            targ_tol_axs = targ_tol_fig.add_subplot(1, 1, 1)
+        else:
+            targ_tol_axs = targ_axs
         targ_tol_axs.set_xlabel('Time (Seconds since start of training)')
         targ_tol_axs.set_ylabel('Tolerance towards label {}'.format(
             runInfo.target))
         targ_tol_axs.legend(loc='lower right')
 
-        indsc_tol_fig = plt.figure()
-        indsc_tol_axs = indsc_tol_fig.add_subplot(1, 1, 1)
+        if indsc_axs is None:
+            indsc_tol_fig = plt.figure()
+            indsc_tol_axs = indsc_tol_fig.add_subplot(1, 1, 1)
+        else:
+            indsc_tol_axs = indsc_axs
         indsc_tol_axs.set_xlabel('Time (Seconds since start of training)')
         indsc_tol_axs.set_ylabel('Tolerance towards next highest')
         indsc_tol_axs.legend(loc='lower right')
@@ -308,16 +336,20 @@ def plot_confidences(runInfo):
         targ_tolerance = compute_targeted(run, runInfo)
         indsc_tolerance = compute_indiscriminate(run)
 
-        for lbl, (tt, it) in enumerate(zip(targ_tolerance, indsc_tolerance)):
+        logging.debug('Plotting')
+        for tt, it in zip(targ_tolerance, indsc_tolerance):
             nt = np.asarray(tt)
             ni = np.asarray(it)
 
-            indsc_tol_axs.plot(ni[:, 0], ni[:, lbl])
-            targ_tol_axs.plot(nt[:, 0], nt[:, lbl])
+            targ_tol_axs.plot(nt[:, 0], nt[:, 1])
+            indsc_tol_axs.plot(ni[:, 0], ni[:, 1])
 
-        # TODO remove name conflict across runs
-        targ_tol_fig.savefig(runInfo.format_name() + '_targ.png')
-        indsc_tol_fig.savefig(runInfo.format_name() + '_indsc.png')
+        logging.debug('Saving')
+
+        targ_tol_fig.savefig(runInfo.format_name() +
+                             '_{}_targ.png'.format(ridx))
+        indsc_tol_fig.savefig(runInfo.format_name() +
+                              '_{}_indsc.png'.format(ridx))
 
 
 if __name__ == '__main__':
@@ -328,5 +360,5 @@ if __name__ == '__main__':
 
     run_info = hogwild_run(args.filepath)
 
-    # plot_eval(run_info)
-    # plot_confidences(run_info)
+    plot_eval(run_info)
+    plot_confidences(run_info)
