@@ -38,8 +38,8 @@ class hogwild_run(object):
     the given configuration for a user-specified number of runs
 
     File formats should be:
-        baseline -> [name]-[workers], eg baseline-3
-        indiscriminate -> [name]-[workers]-[run], eg indisc-3-0
+        Single run -> [name]-[workers], eg baseline-3, indsc-3
+        Multiple runs -> [name]-[workers]-[run], eg baseline-3-0, indsc-3-0
         targeted -> [name]-[workers]-[target]-[bias]-[run], eg targ-3-6-20-0
     """
 
@@ -53,7 +53,7 @@ class hogwild_run(object):
             self.workers = None
             self.target = None
             self.bias = None
-            self.baseline = None
+            self.single_run = None
             self.path = None
             self.runs = None
 
@@ -66,12 +66,13 @@ class hogwild_run(object):
             runname = runname.split('-')  # break into individual components
             filepath = '/'.join(filepath.split('/')[:-1])
 
-            if len(runname) == 2:  # baseline run (single run)
-                self.setup(runname[0], workers=runname[1], baseline=True,
+            if len(runname) == 2:  # single run
+                self.setup(runname[0], workers=runname[1], single_run=True,
                            path=filepath)
 
-            elif len(runname) == 3:  # indiscriminate run (multiple runs)
-                self.setup(runname[0], workers=runname[1], path=filepath)
+            elif len(runname) == 3:  # non-targeted multiple run
+                self.setup(runname[0], workers=runname[1], single_run=False,
+                           path=filepath)
 
             elif len(runname) == 5:  # targeted run (multiple runs)
                 self.setup(runname[0], workers=runname[1], target=runname[2],
@@ -80,7 +81,7 @@ class hogwild_run(object):
                 raise NotImplementedError
 
     def setup(self, runname, workers=1, target=None,  # pylint: disable=R0913
-              bias=None, baseline=False, path=None, runs=1):
+              bias=None, single_run=False, path=None, runs=1):
         """Assign run configuration information
 
         Called by init, or allows a manual user override. This function must be
@@ -89,14 +90,14 @@ class hogwild_run(object):
         self.workers = workers
         self.target = target
         self.bias = bias
-        self.baseline = baseline
+        self.single_run = single_run
         self.path = path
         self.runs = runs
         logging.debug('runname is %s', runname)
         logging.debug('workers is %s', workers)
         logging.debug('target is %s', target)
         logging.debug('bias is %s', bias)
-        logging.debug('baseline is %s', baseline)
+        logging.debug('single_run is %s', single_run)
         logging.debug('path is %s', path)
         logging.debug('runs is %s', runs)
 
@@ -109,12 +110,7 @@ class hogwild_run(object):
         title)"""
         assert(self.runname is not None), 'get_filename called before setup!'
 
-        if self.baseline:
-            # only ran a single instance of each baseline, doesn't have
-            # multiple runs!
-            return "{}-{}".format(self.runname, self.workers)
-
-        elif self.target is not None and self.bias is not None:
+        if self.target is not None and self.bias is not None:
             return "{}-{}-{}-{}".format(self.runname, self.workers,
                                         self.target, self.bias)
 
@@ -131,8 +127,8 @@ class hogwild_run(object):
         assert(self.runname is not None), 'get_filename called before setup!'
         runs = self.runs if runs is None else runs
 
-        if self.baseline:
-            # only ran a single instance of each baseline, doesn't have
+        if self.single_run:
+            # only ran a single instance of each single_run, doesn't have
             # multiple runs!
             return [self.format_name()]
 
@@ -198,8 +194,8 @@ class hogwild_run(object):
         Uses get_fullname, so a path must be set before using this function
 
         Parallelizes across evaluation files... This really isn't necessecary
-        for a single baseline or when multiple runs aren't used, but it's
-        helpful when eval files are large AND multiple runs are used"""
+        when multiple runs aren't used, but it's helpful when eval files are
+        large AND multiple runs are used"""
         func = partial(load_csv_file, skip_header=1)
         with Pool(10) as p:  # pylint: disable=E1129
             data = p.map(func, ["{}/eval".format(fname) for fname in
@@ -207,14 +203,14 @@ class hogwild_run(object):
         return [x for x in data if x is not None]
 
 
-def average_at_evals(single_run):
+def average_at_evals(curr_run):
     """Average the confidences for each evaluation
 
     Call once for each run
     """
     mean_func = partial(np.mean, axis=0)
     fdata = []  # list of all labels for the current run
-    for corr_label in single_run:
+    for corr_label in curr_run:
         # pylint: disable=E1101
 
         # Truncate partial predictions (eg, if a run was stopped
@@ -240,18 +236,20 @@ def average_at_evals(single_run):
     return fdata
 
 
-def compute_targeted(single_run, runInfo):
+def compute_targeted(curr_run, runInfo):
     """Find the tolerance of the correct label to the target label for the
     run"""
-    assert(runInfo.target is not None), 'Target cannot be none'
+    # assert(runInfo.target is not None), 'Target cannot be none'
 
     tolerance_to_targ = []
     # pylint: disable=E1101
     strt = time.process_time()
-    for cidx, corr_label in enumerate(single_run):
+    for cidx, corr_label in enumerate(curr_run):
         tol = np.zeros((len(corr_label), 2))
         tol[:, 0] = corr_label[:, 0]
-        tol[:, 1] = corr_label[:, cidx+1] - corr_label[:, runInfo.target]
+        # tol[:, 1] = corr_label[:, cidx+1] - corr_label[:, runInfo.target]
+        # TODO use target
+        tol[:, 1] = corr_label[:, cidx+1] - corr_label[:, 3]
         tolerance_to_targ.append(tol)
     logging.info('%.4fS to compute', time.process_time() - strt)
 
@@ -273,13 +271,13 @@ def subtract_max(row, corr):
     return nrow
 
 
-def compute_indiscriminate(single_run):
+def compute_indiscriminate(curr_run):
     """Find the tolerance of the correct label to the next highest confidence
     prediction"""
     tolerance_to_any = []
     # pylint: disable=E1101
     strt = time.process_time()
-    for cidx, corr_label in enumerate(single_run):
+    for cidx, corr_label in enumerate(curr_run):
         max_func = partial(subtract_max, corr=cidx)
         with Pool(10) as p:  # pylint: disable=E1129
             tolerance_to_any.append(p.map(max_func, corr_label))
