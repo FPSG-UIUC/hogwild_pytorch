@@ -346,6 +346,7 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
 
         logging.debug('Saving')
 
+        # TODO change destination path
         targ_tol_fig.savefig(runInfo.format_name() +
                              '_{}_targ.png'.format(ridx))
         indsc_tol_fig.savefig(runInfo.format_name() +
