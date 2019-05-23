@@ -335,15 +335,12 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         targ_tolerance = compute_targeted(run, runInfo)
         indsc_tolerance = compute_indiscriminate(run)
 
-        logging.debug('Plotting')
         for tt, it in zip(targ_tolerance, indsc_tolerance):
             nt = np.asarray(tt)
             ni = np.asarray(it)
 
             targ_tol_axs.plot(nt[:, 0], nt[:, 1])
             indsc_tol_axs.plot(ni[:, 0], ni[:, 1])
-
-        logging.debug('Saving')
 
         # TODO change destination path
         targ_tol_fig.savefig(runInfo.format_name() +
