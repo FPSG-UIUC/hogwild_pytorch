@@ -6,6 +6,7 @@ import argparse
 import logging
 import os
 import time
+from itertools import count
 from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
@@ -334,11 +335,18 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         indsc_tol_axs.set_ylabel('Tolerance towards next highest')
         indsc_tol_axs.legend(loc='lower right')
 
+        indsc_tolerance = compute_indiscriminate(run)
         if runInfo.target is not None:
             targ_tolerance = compute_targeted(run, runInfo)
-        indsc_tolerance = compute_indiscriminate(run)
+            itera = zip(targ_tolerance, indsc_tolerance)
+        else:
+            # count is a really ugly solution here, but it does the job.
+            # Really, targ_tolerance doesn't exist when not running with a
+            # target, but we still want to iterate over the following loop,
+            # this is just a silly way to avoid having to change the logic :(
+            itera = zip(count(), indsc_tolerance)
 
-        for tt, it in zip(targ_tolerance, indsc_tolerance):
+        for tt, it in itera:
             if runInfo.target is not None:
                 nt = np.asarray(tt)
             ni = np.asarray(it)
