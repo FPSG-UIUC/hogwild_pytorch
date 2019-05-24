@@ -14,6 +14,8 @@ import numpy as np
 
 parser = argparse.ArgumentParser(description='Wrapper for data parallelism')
 
+NUM_WORKERS = 5
+
 
 def load_csv_file(fname, skip_header=0, skip_size=1):
     """Generic function to load a formatted csv file
@@ -28,13 +30,10 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
         # pylint: disable=E1101
         data = np.genfromtxt(fname, delimiter=',', dtype=float,
                              skip_header=skip_header)
-        offset_time = 0
         for i in range(0, len(data) - 1, skip_size):
-            data[i, 0] += offset_time  # has no effect if no reset occurred
-
-            if data[i+1, 0] < data[i, 0]:
-                logging.info('Found an appended log')
-                offset_time = data[i, 0]
+            if i > 0 and data[i, 0] < data[i-1, 0]:
+                data[i:, 0] += data[i-1, 0]
+                logging.info('Found an appended log for %s', fname)
 
         return data
     else:
@@ -181,7 +180,7 @@ class hogwild_run(object):
         load_func = partial(load_csv_file, skip_header=0, skip_size=1000)
         loaded_preds = []
         for run in self.get_fullnames():
-            with Pool(10) as p:  # pylint: disable=E1129
+            with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
                 data = p.map(load_func, ["{}/conf.{}".format(run, corr_label)
                                          for corr_label in range(10)])
 
@@ -213,7 +212,7 @@ class hogwild_run(object):
         when multiple runs aren't used, but it's helpful when eval files are
         large AND multiple runs are used"""
         func = partial(load_csv_file, skip_header=1)
-        with Pool(10) as p:  # pylint: disable=E1129
+        with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
             data = p.map(func, ["{}/eval".format(fname) for fname in
                                 self.get_fullnames()])
         return [x for x in data if x is not None]
@@ -244,7 +243,7 @@ def average_at_evals(curr_run):
         #
         # limit to 10 threads to make condor scheduling
         # deterministic
-        with Pool(10) as p:  # pylint: disable=E1129
+        with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
             sdata = p.map(mean_func, sdata)
 
         fdata.append(sdata)
@@ -295,7 +294,7 @@ def compute_indiscriminate(curr_run):
     strt = time.process_time()
     for cidx, corr_label in enumerate(curr_run):
         max_func = partial(subtract_max, corr=cidx)
-        with Pool(10) as p:  # pylint: disable=E1129
+        with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
             tolerance_to_any.append(p.map(max_func, corr_label))
         # tol = np.zeros((len(corr_label), 2))
         # tol[:, 0] = corr_label[:, 0]
@@ -384,5 +383,5 @@ if __name__ == '__main__':
 
     run_info = hogwild_run(args.filepath)
 
-    # plot_eval(run_info)
-    # plot_confidences(run_info)
+    plot_eval(run_info)
+    plot_confidences(run_info)
