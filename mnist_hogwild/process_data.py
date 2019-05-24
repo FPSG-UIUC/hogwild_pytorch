@@ -36,17 +36,6 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
                 logging.info('Found an appended log')
                 offset_time = data[i, 0]
 
-            pp = p = n = nn = 'D'
-            if i >= 2 and data[i-2, 0] == data[i, 0]:
-                pp = 'S'
-            if i >= 1 and data[i-1, 0] == data[i, 0]:
-                p = 'S'
-            if data[i+1, 0] == data[i, 0]:
-                n = 'S'
-            if i < len(data)-2 and data[i+2, 0] == data[i, 0]:
-                nn = 'S'
-            logging.debug('%s-%s-^-%s-%s', pp, p, n, nn)
-
         return data
     else:
         logging.error("%s not found", fname)
