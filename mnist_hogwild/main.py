@@ -91,6 +91,7 @@ def procs_alive(procs):
 def setup_outfiles(dirname, create=True, prepend=None):
     if prepend is not None:
         assert(prepend != dirname), 'Prepend and output cannot be the same!'
+
     # Create directory and clear files if they exist
     if os.path.exists(dirname):
         try:
@@ -111,9 +112,10 @@ def setup_outfiles(dirname, create=True, prepend=None):
         assert(os.path.exists(prepend)), 'Prepend directory not found'
         log_files = ['eval', 'conf.{}'.format(i for i in range(10))]
         for cf in log_files:
-            estring = "Missing {}".format(cf)
-            assert(os.path.isfile("{}/{}".format(prepend, cf))), estring
-            copy("{}/{}".format(prepend, cf), "{}/{}".format(dirname, cf))
+            pre_fpath = "{}/{}".format(prepend, cf)
+            assert(os.path.isfile(pre_fpath)), "Missing {}".format(pre_fpath)
+
+            copy(pre_fpath, "{}/{}".format(dirname, cf))
 
 
 if __name__ == '__main__':
