@@ -89,14 +89,8 @@ def procs_alive(procs):
 
 
 def setup_outfiles(dirname, create=True, prepend=None):
-    if not create and prepend is not None:
-        # Make sure prepend path exists, then copy the logs over
-        assert(os.path.exists(prepend))  # pylint: disable=C0325
-        log_files = ['eval', 'conf.{}'.format(i for i in range(10))]
-        for cf in log_files:
-            assert("{}/{}".format(prepend, cf))  # pylint: disable=C0325
-            copy("{}/{}".format(prepend, cf), "{}/{}".format(dirname, cf))
-
+    if prepend is not None:
+        assert(prepend != dirname), 'Prepend and output cannot be the same!'
     # Create directory and clear files if they exist
     if os.path.exists(dirname):
         try:
@@ -110,6 +104,16 @@ def setup_outfiles(dirname, create=True, prepend=None):
         of.write("time,accuracy\n")
     logging.info('Created new evaluation output file (%s)',
                  "{}/eval".format(dirname))
+
+    if not create and prepend is not None:
+        logging.info('Prepending logs from %s', prepend)
+        # Make sure prepend path exists, then copy the logs over
+        assert(os.path.exists(prepend)), 'Prepend directory not found'
+        log_files = ['eval', 'conf.{}'.format(i for i in range(10))]
+        for cf in log_files:
+            estring = "Missing {}".format(cf)
+            assert(os.path.isfile("{}/{}".format(prepend, cf))), estring
+            copy("{}/{}".format(prepend, cf), "{}/{}".format(dirname, cf))
 
 
 if __name__ == '__main__':
