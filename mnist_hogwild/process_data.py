@@ -34,9 +34,11 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
         # handle appended logs by offsetting each appended time by the end time
         # of the previous log -> converts all time into a monotonically
         # increasing counter
+        accum_total = 0
         for i in range(0, len(data) - 1, skip_size):
             if i > 0 and data[i, 0] < data[i-1, 0]:
-                data[i:, 0] += data[i-1, 0]
+                data[i:, 0] += data[i-1, 0] - accum_total
+                accum_total = data[i-1, 0]
                 logging.info('Found an appended log for %s', fname)
 
         return data
