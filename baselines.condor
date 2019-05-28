@@ -22,6 +22,7 @@ Arguments = "$(runname) \
              --log-interval 10 \
              --lr $(lr) \
              --checkpoint-name $(runname) \
+             --checkpoint-lname /shared/jose/pytorch/checkpoints/$(runname) \
              --soft-resume \
              --prepend-logs /shared/jose/pytorch/outputs/$(runname) \
              --max-steps $(max_steps) \
@@ -29,6 +30,7 @@ Arguments = "$(runname) \
              --num-processes $(numWorkers)"
 
 Queue 1 numWorkers max_steps resume lr from (
-        1 100 150 0.01
-        2 100 150 0.01
+        3 150 100 0.01
+        # 1 100 100 0.001
+        # 2 100 100 0.001
 )

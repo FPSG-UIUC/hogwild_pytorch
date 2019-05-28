@@ -173,12 +173,13 @@ if __name__ == '__main__':
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
             if os.path.isfile(ckpt_load_fname):
-                logging.info('Found checkpoint')
                 logging.debug('Did not create new evaluation output file %s',
                               "{}/eval".format(outdir))
                 checkpoint = torch.load(ckpt_load_fname)
                 model.load_state_dict(checkpoint['net'])
                 best_acc = checkpoint['acc']
+                logging.info('Found checkpoint %s at %.4f', ckpt_load_fname,
+                             best_acc)
                 setup_outfiles(outdir, create=False, prepend=args.prepend_logs
                                if os.path.isfile(args.prepend_logs) else None)
 
