@@ -14,7 +14,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser(description='Wrapper for data parallelism')
 
-NUM_WORKERS = 5
+NUM_WORKERS = 10
 
 
 def load_csv_file(fname, skip_header=0, skip_size=1):
