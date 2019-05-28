@@ -11,7 +11,7 @@ stream_error = True
 
 priority = 0
 request_GPUs = 0
-request_CPUs = 10
+request_CPUs = 5
 
 should_transfer_files = NO
 

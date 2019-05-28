@@ -30,6 +30,10 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
         # pylint: disable=E1101
         data = np.genfromtxt(fname, delimiter=',', dtype=float,
                              skip_header=skip_header)
+
+        # handle appended logs by offsetting each appended time by the end time
+        # of the previous log -> converts all time into a monotonically
+        # increasing counter
         for i in range(0, len(data) - 1, skip_size):
             if i > 0 and data[i, 0] < data[i-1, 0]:
                 data[i:, 0] += data[i-1, 0]
@@ -311,6 +315,7 @@ def plot_eval(runInfo):
     """Plot evaluation accuracy over time for each run in the configuration"""
     accuracy_fig = plt.figure()
     accuracy_axs = accuracy_fig.add_subplot(1, 1, 1)
+    accuracy_axs.set_title(runInfo.format_name())
     accuracy_axs.set_xlabel('Time (Seconds since start of training)')
     accuracy_axs.set_ylabel('Top-1 Accuracy')
     accuracy_axs.legend(loc='lower right')
@@ -333,6 +338,7 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
                 targ_tol_axs = targ_tol_fig.add_subplot(1, 1, 1)
             else:
                 targ_tol_axs = targ_axs
+            targ_tol_axs.set_title(runInfo.format_name())
             targ_tol_axs.set_xlabel('Time (Seconds since start of training)')
             targ_tol_axs.set_ylabel('Tolerance towards label {}'.format(
                 runInfo.target))
@@ -343,6 +349,7 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
             indsc_tol_axs = indsc_tol_fig.add_subplot(1, 1, 1)
         else:
             indsc_tol_axs = indsc_axs
+        indsc_tol_axs.set_title(runInfo.format_name())
         indsc_tol_axs.set_xlabel('Time (Seconds since start of training)')
         indsc_tol_axs.set_ylabel('Tolerance towards next highest')
         indsc_tol_axs.legend(loc='lower right')
@@ -385,3 +392,5 @@ if __name__ == '__main__':
 
     plot_eval(run_info)
     plot_confidences(run_info)
+
+    logging.info('Finished plotting')
