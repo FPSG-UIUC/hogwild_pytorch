@@ -4,6 +4,7 @@ Executable = /home/josers2/pytorch.examples/mnist_hogwild/main.py
 # InitialDir = /scratch/hogwild/mnist_hogwild
 
 runname = baseline-$(numWorkers)-$(step)
+ckpt_name = /shared/jose/pytorch/checkpoints/$(runname).ckpt
 
 Output = /shared/jose/pytorch/$(runname).out
 Error = /shared/jose/pytorch/$(runname).err
@@ -22,7 +23,7 @@ Arguments = "$(runname) \
              --log-interval 10 \
              --lr $(lr) \
              --checkpoint-name $(runname) \
-             --checkpoint-lname /shared/jose/pytorch/checkpoints/$(runname) \
+             --checkpoint-lname $(ckpt_name) \
              --soft-resume \
              --prepend-logs /shared/jose/pytorch/outputs/$(runname) \
              --max-steps $(max_steps) \
