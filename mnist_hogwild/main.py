@@ -183,7 +183,7 @@ if __name__ == '__main__':
                                if os.path.isfile(args.prepend_logs) else None)
 
             else:
-                logging.info('%s not found, not resuming', ckpt_load_fname)
+                logging.warn('%s not found, not resuming', ckpt_load_fname)
                 args.resume = -1
                 setup_outfiles(outdir, create=True)
     else:
