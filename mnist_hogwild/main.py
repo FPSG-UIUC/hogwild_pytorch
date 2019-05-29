@@ -189,6 +189,7 @@ if __name__ == '__main__':
             raise
 
     # Directory to save logs to
+    # if changed, make sure the name in test_epoch in train.py matches
     outdir = "/scratch/{}.hogwild".format(args.runname)
     logging.info('Output directory is %s', outdir)
 

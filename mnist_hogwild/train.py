@@ -1,4 +1,7 @@
-# pylint: disable=C0103,C0111
+"""The code for the worker thread.
+
+Based on: https://github.com/pytorch/examples/tree/master/mnist_hogwild
+See main.py for modifications"""
 
 import os
 import logging
@@ -10,18 +13,23 @@ import torch.nn as nn  # pylint: disable=F0401
 from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
+FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
+
 
 def train(rank, args, model, device, dataloader_kwargs):
+    """The function which does training
 
-    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
+    Calls train_epoch once for each epoch, each call is an iteration over the
+    dataset"""
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
                             '/scratch/{}.log'.format(args.runname)),
                                   logging.StreamHandler()])
 
     torch.manual_seed(args.seed + rank)
-    torch.set_num_threads(6)
+    torch.set_num_threads(6)  # number of MKL threads for training
 
+    # Dataset loader
     train_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('/scratch/data/', train=True, download=True,
                          transform=transforms.Compose([
@@ -39,6 +47,8 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
                           momentum=args.momentum)
+
+    # Set up the learning rate schedule
     epoch = 0 if args.resume == -1 else args.resume
     if args.num_workers == 1:
         epoch_list = [150, 250]
@@ -48,13 +58,20 @@ def train(rank, args, model, device, dataloader_kwargs):
         epoch_list = [100, 150]
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
                                          gamma=0.1, last_epoch=epoch)
+
     for c_epoch in range(epoch, epoch + args.max_steps):
         scheduler.step()
         train_epoch(c_epoch, args, model, device, train_loader, optimizer)
         # val_loss, _ = test(args, model, device, dataloader_kwargs, c_epoch)
 
 
+# pylint: disable=R0913
 def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
+    """Set up the dataset for evaluation
+
+    Can be called by the worker or the main/evaluation thread.
+    Useful for the worker to call this function when the worker is using a LR
+    which decays based on validation loss/accuracy (eg step on plateau)"""
     torch.manual_seed(args.seed)
 
     test_loader = torch.utils.data.DataLoader(
@@ -75,17 +92,23 @@ def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
 
 
 def get_lr(optimizer):
+    """Used for convenience when printing"""
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
 
 def train_epoch(epoch, args, model, device, data_loader, optimizer):
+    """Iterate over the entire dataset in batches and train on them
+
+    Modified to calculate the bias of each batch and signal (through a file) if
+    the batch is biased, and can be used for an attack"""
+    # pylint: disable=R0914
     model.train()
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
     for batch_idx, (data, target) in enumerate(data_loader):
         # Bias detection/reveal
-        # this should ideally be a side channel in the data_loader logic
+        # this would ideally be a side channel in the data_loader logic
         target_count = 0
         for lbl in target:
             if lbl == args.target:
@@ -94,8 +117,8 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
         # print("Bias: {}".format(bias))
         if bias > args.bias and bias < args.bias + 0.05:
             logging.debug("------------->Biased by %0.3f!", bias)
-            with open("/scratch/{}.bias".format(args.runname), 'a+') as f:
-                f.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
+            with open("/scratch/{}.bias".format(args.runname), 'a+') as out:
+                out.write("{},{},{},{}\n".format(pid, epoch, batch_idx, bias))
             time.sleep(2)
             logging.debug("------------->Continue Training!")
 
@@ -104,6 +127,8 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
         loss = criterion(output, target.to(device))
         loss.backward()
         optimizer.step()
+
+        # Log the results ever log_interval steps within an epoch
         if batch_idx % args.log_interval == 0:
             logging.info('%s @ %s:%s (%.0f) -> %.6f', pid, epoch,
                          get_lr(optimizer), batch_idx * len(data), loss.item())
@@ -115,6 +140,11 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
 
 
 def test_epoch(model, device, data_loader, args=None, etime=None):
+    """Iterate over the validation dataset in batches
+
+    If called by the evaluation thread (current time is passed in) logs the
+    confidences of each image in the batch"""
+    # pylint: disable=R0914
     model.eval()
     test_loss = 0
     correct = 0
@@ -125,14 +155,15 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
         for data, target in data_loader:
             output = model(data.to(device))
 
+            # If called by the evaluation thread, log prediction confidences
             if etime is not None:
                 for targ, pred in zip(target, output.detach().numpy()):
                     # only ever append, the eval thread will remove the files
                     # if a checkpoint is not being used.
-                    with open(outfile.format(targ), 'a+') as f:
-                        f.write("{},{}\n".format(etime, ','.join(['%.6f' % num
-                                                                  for num in
-                                                                  pred])))
+                    with open(outfile.format(targ), 'a+') as out:
+                        out.write("{},{}\n".format(etime,
+                                                   ','.join(['%.6f' % num for
+                                                             num in pred])))
 
             # sum up batch loss
             test_loss += criterion(output, target.to(device)).item()
