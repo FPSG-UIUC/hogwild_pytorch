@@ -59,7 +59,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     else:
         raise NotImplementedError
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
-                                         gamma=0.1, last_epoch=epoch)
+                                         gamma=0.1)
 
     for c_epoch in range(epoch, epoch + args.max_steps):
         scheduler.step()
