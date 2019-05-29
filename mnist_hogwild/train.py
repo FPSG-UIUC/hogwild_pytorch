@@ -58,6 +58,7 @@ def train(rank, args, model, device, dataloader_kwargs):
         epoch_list = [100, 150]
     else:
         raise NotImplementedError
+    logging.info('LR Schedule is %s', epoch_list)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
                                          gamma=0.1)
 
