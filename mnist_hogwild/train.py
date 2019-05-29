@@ -50,12 +50,14 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     # Set up the learning rate schedule
     epoch = 0 if args.resume == -1 else args.resume
-    if args.num_workers == 1:
+    if args.num_processes == 1:
         epoch_list = [150, 250]
-    elif args.num_workers == 2:
+    elif args.num_processes == 2:
         epoch_list = [125, 200]
-    elif args.num_workers == 3:
+    elif args.num_processes == 3:
         epoch_list = [100, 150]
+    else:
+        raise NotImplementedError
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
                                          gamma=0.1, last_epoch=epoch)
 
