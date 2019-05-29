@@ -17,7 +17,7 @@ FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
 
 
 def train(rank, args, model, device, dataloader_kwargs):
-    """The function which does training
+    """The function which does the actual training
 
     Calls train_epoch once for each epoch, each call is an iteration over the
     dataset"""
