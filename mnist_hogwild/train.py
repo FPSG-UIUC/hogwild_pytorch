@@ -7,7 +7,7 @@ import time
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
-# from torch.optim import lr_scheduler  # pylint: disable=F0401
+from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
 
@@ -40,9 +40,16 @@ def train(rank, args, model, device, dataloader_kwargs):
     optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=5e-4,
                           momentum=args.momentum)
     epoch = 0 if args.resume == -1 else args.resume
-    # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[150, 250],
-    #                                      gamma=0.1, last_epoch=epoch)
+    if args.num_workers == 1:
+        epoch_list = [150, 250]
+    elif args.num_workers == 2:
+        epoch_list = [125, 200]
+    elif args.num_workers == 3:
+        epoch_list = [100, 150]
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
+                                         gamma=0.1, last_epoch=epoch)
     for c_epoch in range(epoch, epoch + args.max_steps):
+        scheduler.step()
         train_epoch(c_epoch, args, model, device, train_loader, optimizer)
         # val_loss, _ = test(args, model, device, dataloader_kwargs, c_epoch)
 

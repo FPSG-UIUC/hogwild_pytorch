@@ -1,5 +1,27 @@
 #!/usr/bin/python3.5
-# pylint: disable=C0103,C0111,R0903
+"""A hogwild style ASGD implementation of RESNET
+
+Based on: https://github.com/pytorch/examples/tree/master/mnist_hogwild
+
+Network and Performance modifications are:
+    - Use Cifar10 and {Resnet,Lenet}
+    - Use a step learning rate
+    - Use the main thread for evaluations, instead of the worker threads
+    (instead of waiting on a join call, it periodically checks thread status)
+Usability modifications are:
+    - Generate CSV logs of output, rather than dumping to STDOUT
+    - Use python logger instead of dumping to STDOUT
+Asynchronous Poisoning Attack modifications are:
+    - Have worker threads communicate when they find a biased batch, and
+    increase the time between when they find the batch and when they do work
+    with the batch. This simplifies the granularity needed by the OS to halt
+    them. The bias is calculated by the threads instead of over a side channel.
+    - Have the main thread communicate when training is ending, so the OS can
+    release the halted attack threads
+
+    All communication with the OS is done through files (see apa.sh)
+"""
+# pylint: disable=C0103,R0903
 
 from __future__ import print_function
 import argparse
@@ -26,7 +48,7 @@ parser.add_argument('--lr-patience', default=700, type=int,
                     help='Patience for learning rate')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
-parser.add_argument('--max-steps', default=150, type=int,
+parser.add_argument('--max-steps', default=350, type=int,
                     help='Number of epochs each worker should train for')
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
                     ' iff available')
@@ -62,6 +84,7 @@ parser.add_argument('--cuda', action='store_true', default=False,
 
 
 class Net(nn.Module):
+    """Lenet style network, can be used in place of resnet"""
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=5, bias=True)
@@ -72,6 +95,7 @@ class Net(nn.Module):
         self.fc3 = nn.Linear(192, 10, bias=True)
 
     def forward(self, x):
+        """Setup connections between defined layers"""
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
         x = x.view(-1, 256)
@@ -81,14 +105,36 @@ class Net(nn.Module):
         return F.log_softmax(x, dim=1)
 
 
+def proc_dead(procs):
+    """Returns false as long as one of the workers is dead
+
+    useful for releasing the attack thread"""
+    for cp in procs:
+        if not cp.is_alive():
+            return False
+    return True
+
+
 def procs_alive(procs):
+    """Returns true as long as any worker is alive
+
+    Used in place of join, to allow for the main thread to work while
+    waiting"""
     for cp in procs:
         if cp.is_alive():
             return True
     return False
 
 
-def setup_outfiles(dirname, create=True, prepend=None):
+def setup_outfiles(dirname, prepend=None):
+    """Call this function with the output directory for logs
+
+    If the output directory does not exist, it is created.
+
+    If the output directory exists, but has old logs, they are removed.
+
+    If using a checkpoint, allows for prepending the old logs to the new ones,
+    for convenience when graphing"""
     if prepend is not None:
         assert(prepend != dirname), 'Prepend and output cannot be the same!'
 
@@ -101,20 +147,14 @@ def setup_outfiles(dirname, create=True, prepend=None):
             logging.error(sys.exc_info()[0])
             sys.exit(1)
     os.mkdir(dirname)
-    with open("{}/eval".format(dirname), 'w+') as of:
-        of.write("time,accuracy\n")
-    logging.info('Created new evaluation output file (%s)',
-                 "{}/eval".format(dirname))
 
-    if not create and prepend is not None:
+    if prepend is not None:  # prepending from checkpoint
         logging.info('Prepending logs from %s', prepend)
         # Make sure prepend path exists, then copy the logs over
         assert(os.path.exists(prepend)), 'Prepend directory not found'
-        log_files = ['eval', 'conf.{}'.format(i for i in range(10))]
-        for cf in log_files:
+        for cf in ['eval', 'conf.{}'.format(i for i in range(10))]:
             pre_fpath = "{}/{}".format(prepend, cf)
             assert(os.path.isfile(pre_fpath)), "Missing {}".format(pre_fpath)
-
             copy(pre_fpath, "{}/{}".format(dirname, cf))
 
 
@@ -137,6 +177,7 @@ if __name__ == '__main__':
     # gradients are allocated lazily, so they are not shared here
     model.share_memory()
 
+    # Make sure the directory to save checkpoints already exists
     ckpt_dir = '/scratch/checkpoints'
     try:
         os.mkdir(ckpt_dir)
@@ -147,6 +188,7 @@ if __name__ == '__main__':
         else:
             raise
 
+    # Directory to save logs to
     outdir = "/scratch/{}.hogwild".format(args.runname)
     logging.info('Output directory is %s', outdir)
 
@@ -158,9 +200,11 @@ if __name__ == '__main__':
 
     best_acc = 0  # loaded from ckpt
 
-    # load checkpoint
+    # load checkpoint if resume epoch is specified
     if args.resume != -1:
         logging.info('Resuming from checkpoint')
+
+        # If not using soft resume, the checkpoint _must_ exist
         if not args.soft_resume:
             logging.debug('Not using soft resume')
             assert(os.path.isfile(ckpt_load_fname)), \
@@ -168,10 +212,12 @@ if __name__ == '__main__':
             checkpoint = torch.load(ckpt_load_fname)
             model.load_state_dict(checkpoint['net'])
             best_acc = checkpoint['acc']
-            setup_outfiles(outdir, create=False, prepend=args.prepend_logs)
+            setup_outfiles(outdir, prepend=args.prepend_logs)
 
         else:  # soft resume, checkpoint may not exist
             logging.debug('Using soft resume')
+
+            # check whether checkpoint file exists, load if it does
             if os.path.isfile(ckpt_load_fname):
                 logging.debug('Did not create new evaluation output file %s',
                               "{}/eval".format(outdir))
@@ -180,22 +226,24 @@ if __name__ == '__main__':
                 best_acc = checkpoint['acc']
                 logging.info('Found checkpoint %s at %.4f', ckpt_load_fname,
                              best_acc)
-                setup_outfiles(outdir, create=False, prepend=args.prepend_logs
+                setup_outfiles(outdir, prepend=args.prepend_logs
                                if os.path.isfile(args.prepend_logs) else None)
 
-            else:
+            else:  # checkpoint does not exist, do not load (but warn)
                 logging.warn('%s not found, not resuming', ckpt_load_fname)
                 args.resume = -1
-                setup_outfiles(outdir, create=True)
-    else:
-        logging.info('Not loading a checkpoint')
-        setup_outfiles(outdir, create=True)
+                setup_outfiles(outdir)
 
+    else:  # not resuming
+        logging.info('Not loading a checkpoint')
+        setup_outfiles(outdir)
+
+    # Spawn the worker processes. Each runs an independent call of the train
+    # function
     processes = []
     for rank in range(args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
-        # We first train the model across `num_processes` processes
         p.start()
         processes.append(p)
         logging.info('Started %s', p.pid)
@@ -204,13 +252,15 @@ if __name__ == '__main__':
     # if accuracy has not changed in the last half hour, vulnerable to attack.
     start_time = time.time()
 
-    torch.set_num_threads(2)
+    torch.set_num_threads(2)  # number of MKL threads for evaluation
 
+    # While any process is alive, continuously evaluate accuracy - the master
+    # thread is the evaluation thread
     val_accuracy = 0
     while procs_alive(processes):
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
-        with open("{}/eval".format(outdir), 'a') as f:
+        with open("{}/eval".format(outdir), 'a+') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Accuracy is %s', val_accuracy)
         # time.sleep(300)
@@ -224,15 +274,22 @@ if __name__ == '__main__':
             torch.save(state, ckpt_output_fname)
             best_acc = val_accuracy
 
-    with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
-        f.write('accuracy leveled off')
-    logging.info("Accuracy Leveled off")
+        # if any worker reached the maximum number of epochs, alert the OS to
+        # release the attack thread. The attack thread will be killed by the OS
+        # after the attack, so nothing else need be done.
+        if proc_dead(processes):
+            with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
+                f.write('accuracy leveled off')
+            logging.info("Accuracy Leveled off")
 
+    # There should be no processes left alive by this point, but do this anyway
+    # to make sure no orphaned processes are left behind
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
 
     logging.info('Training run time: %.2f', time.time() - start_time)
 
+    # Copy generated logs out of the local directory onto the shared NFS
     final_dir = '/shared/jose/pytorch/outputs/{}'.format(args.runname)
     if os.path.isdir(final_dir):
         rmtree(final_dir)
