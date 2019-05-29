@@ -17,6 +17,7 @@ priority = 0
 request_GPUs = 0
 numCores = $(numWorkers) * 6 + 3
 request_CPUs = $INT(numCores)
+request_LONGJOB = $(request_CPUs)
 
 should_transfer_files = NO
 
