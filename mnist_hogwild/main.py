@@ -111,8 +111,8 @@ def proc_dead(procs):
     useful for releasing the attack thread"""
     for cp in procs:
         if not cp.is_alive():
-            return False
-    return True
+            return True
+    return False  # nothing is dead
 
 
 def procs_alive(procs):
