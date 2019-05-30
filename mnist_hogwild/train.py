@@ -161,6 +161,8 @@ def train(rank, args, model, device, dataloader_kwargs):
             # avoid data races on the log files.
             train_epoch(c_epoch, args, model, device, train_loader, optimizer)
 
+    logging.info('Reached max steps (%i)', c_epoch)
+
 
 # pylint: disable=R0913
 def test(args, model, device, dataloader_kwargs, etime=None):
