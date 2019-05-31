@@ -234,6 +234,12 @@ if __name__ == '__main__':
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Attack Accuracy is %s', val_accuracy)
 
+    val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                  etime=time.time()-start_time)
+    with open("{}/eval".format(outdir), 'a') as f:
+        f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
+    logging.info('Post Attack Accuracy is %s', val_accuracy)
+
     # Attack thread completed, continue with non-attack threads
     for rank in range(1, args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
@@ -244,7 +250,6 @@ if __name__ == '__main__':
 
     # While any process is alive, continuously evaluate accuracy - the master
     # thread is the evaluation thread
-    val_accuracy = 0
     while procs_alive(processes):
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
@@ -252,15 +257,6 @@ if __name__ == '__main__':
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Accuracy is %s', val_accuracy)
         # time.sleep(300)
-
-        if val_accuracy > best_acc:
-            logging.info('Saving %s', ckpt_output_fname)
-            state = {
-                'net': model.state_dict(),
-                'acc': val_accuracy
-            }
-            torch.save(state, ckpt_output_fname)
-            best_acc = val_accuracy
 
     # There should be no processes left alive by this point, but do this anyway
     # to make sure no orphaned processes are left behind
