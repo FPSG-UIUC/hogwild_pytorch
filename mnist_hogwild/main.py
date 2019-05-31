@@ -153,7 +153,8 @@ def setup_outfiles(dirname, prepend=None):
         logging.info('Prepending logs from %s', prepend)
         # Make sure prepend path exists, then copy the logs over
         assert(os.path.exists(prepend)), 'Prepend directory not found'
-        log_files = ['eval', 'conf.{}'.format(i for i in range(10))]
+        log_files = ['eval', 'conf.0', 'conf.1', 'conf.2', 'conf.3', 'conf.4',
+                     'conf.5', 'conf.6', 'conf.7', 'conf.8', 'conf.9']
         for cf in log_files:
             logging.debug('Current file is %s', cf)
             pre_fpath = "{}/{}".format(prepend, cf)
