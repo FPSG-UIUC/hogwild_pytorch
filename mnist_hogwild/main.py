@@ -51,14 +51,10 @@ parser.add_argument('--attack-batches', default=1, type=int,
                     help='number of attack batches to use')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
-parser.add_argument('--soft-resume', action='store_true',
-                    help='Use checkpoint iff available')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
                     metavar='C', help='Checkpoint to resume')
 parser.add_argument('--max-steps', default=350, type=int,
                     help='Number of epochs each worker should train for')
-parser.add_argument('--checkpoint-name', type=str, default='hogwild',
-                    metavar='F', help='Checkpoint to resume')
 parser.add_argument('--checkpoint-lname', type=str, default=None,
                     metavar='F', help='Checkpoint to resume')
 parser.add_argument('--prepend-logs', type=str, default=None,
@@ -207,42 +203,16 @@ if __name__ == '__main__':
     best_acc = 0  # loaded from ckpt
 
     # load checkpoint if resume epoch is specified
-    if args.resume != -1:
-        logging.info('Resuming from checkpoint')
+    assert(args.resume != -1), 'Simulate should be used with a checkpoint'
+    logging.info('Resuming from checkpoint')
 
-        # If not using soft resume, the checkpoint _must_ exist
-        if not args.soft_resume:
-            logging.debug('Not using soft resume')
-            assert(os.path.isfile(ckpt_load_fname)), \
-                'Checkpoint not found'
-            checkpoint = torch.load(ckpt_load_fname)
-            model.load_state_dict(checkpoint['net'])
-            best_acc = checkpoint['acc']
-            setup_outfiles(outdir, prepend=args.prepend_logs)
+    assert(os.path.isfile(ckpt_load_fname)), 'Checkpoint not found'
+    checkpoint = torch.load(ckpt_load_fname)
+    model.load_state_dict(checkpoint['net'])
+    best_acc = checkpoint['acc']
+    setup_outfiles(outdir, prepend=args.prepend_logs)
 
-        else:  # soft resume, checkpoint may not exist
-            logging.debug('Using soft resume')
-
-            # check whether checkpoint file exists, load if it does
-            if os.path.isfile(ckpt_load_fname):
-                logging.debug('Did not create new evaluation output file %s',
-                              "{}/eval".format(outdir))
-                checkpoint = torch.load(ckpt_load_fname)
-                model.load_state_dict(checkpoint['net'])
-                best_acc = checkpoint['acc']
-                logging.info('Found checkpoint %s at %.4f', ckpt_load_fname,
-                             best_acc)
-                setup_outfiles(outdir, prepend=args.prepend_logs
-                               if os.path.isfile(args.prepend_logs) else None)
-
-            else:  # checkpoint does not exist, do not load (but warn)
-                logging.warn('%s not found, not resuming', ckpt_load_fname)
-                args.resume = -1
-                setup_outfiles(outdir)
-
-    else:  # not resuming
-        logging.info('Not loading a checkpoint')
-        setup_outfiles(outdir)
+    torch.set_num_threads(2)  # number of MKL threads for evaluation
 
     # Spawn the worker processes. Each runs an independent call of the train
     # function
@@ -252,21 +222,20 @@ if __name__ == '__main__':
                                            dataloader_kwargs))
     start_time = time.time()
     atk_p.start()
-    while atk_p.is_alive():
+    while atk_p.is_alive():  # evaluate and log!
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
-        logging.info('Accuracy is %s', val_accuracy)
+        logging.info('Attack Accuracy is %s', val_accuracy)
 
+    # Attack thread completed, continue with non-attack threads
     for rank in range(1, args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
         p.start()
         processes.append(p)
         logging.info('Started %s', p.pid)
-
-    torch.set_num_threads(2)  # number of MKL threads for evaluation
 
     # While any process is alive, continuously evaluate accuracy - the master
     # thread is the evaluation thread
@@ -288,20 +257,12 @@ if __name__ == '__main__':
             torch.save(state, ckpt_output_fname)
             best_acc = val_accuracy
 
-        # if any worker reached the maximum number of epochs, alert the OS to
-        # release the attack thread. The attack thread will be killed by the OS
-        # after the attack, so nothing else need be done.
-        if proc_dead(processes):
-            with open('/scratch/{}.status'.format(args.runname), 'w+') as f:
-                f.write('accuracy leveled off')
-            logging.info("Accuracy Leveled off")
-
     # There should be no processes left alive by this point, but do this anyway
     # to make sure no orphaned processes are left behind
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
 
-    logging.info('Training run time: %.2f', time.time() - start_time)
+    logging.info('Simulation run time: %.2f', time.time() - start_time)
 
     # Copy generated logs out of the local directory onto the shared NFS
     final_dir = '/shared/jose/pytorch/outputs/{}'.format(args.runname)

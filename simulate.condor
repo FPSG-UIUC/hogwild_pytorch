@@ -1,7 +1,10 @@
-# attack pytorch hogwild instances
-Executable = /home/josers2/pytorch.examples/mnist_hogwild/apa.sh
+# simulate an attack on pytorch hogwild instances
+# use the baselines script to run out of scratch
+Executable = /home/josers2/pytorch.examples/mnist_hogwild/baselines.sh
 
-runname = apa-$(numWorkers)-$(target_label)-$(step)-$(bias)
+# TODO verify formatting
+runname = sim_$(atk_batches)-$(numWorkers)-$(target_label)-$(bias)-$(step)
+ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
 
 Output = /shared/jose/pytorch/$(runname).out
 Error  = /shared/jose/pytorch/$(runname).err
@@ -10,24 +13,44 @@ stream_output = True
 stream_error = True
 
 # system set up
-priority = 20
 request_GPUs = 0
 request_CPUs = $(numWorkers) * 6 + 3
 
 should_transfer_files = NO
 
-target_label = 6
-bias = 0.2
+target_label = 3
+numWorkers = 3
 
 Arguments = "$(runname) \
-             $(atk_batches) \
-             $(bias)"
+             --log-interval 10 \
+             --lr 0.1 \
+             --checkpoint-name $(runname) \
+             --checkpoint-lname $(ckpt_name) \
+             --prepend-logs /shared/jose/pytorch/outputs/baseline-1-0.hogwild \
+             --resume 350 \
+             --target $(target_label) \
+             --bias $(bias) \
+             --num-processes $(numWorkers)"
 
-Queue 1 atk_batches bias from (
+Queue 2 atk_batches bias from (
         1 0.10
         2 0.10
+        4 0.10
+        6 0.10
+        8 0.10
+        10 0.10
+        20 0.10
+        1 0.172
+        2 0.172
         4 0.172
         6 0.172
+        8 0.172
+        10 0.172
+        20 0.172
+        1 0.20
+        2 0.20
+        4 0.20
+        6 0.20
         8 0.20
         10 0.20
         20 0.20
