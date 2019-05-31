@@ -18,10 +18,12 @@ parser.add_argument('runname', type=str)
 FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(funcName)s]'
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
-# TARGETS = [1, 2, 3, 6, 8, 9]
+TARGETS = [1, 2, 3, 6, 8, 9]
 # BIAS = [10, 20, 30]
-TARGETS = [1]
-BIAS = [10]
+BIAS = [0.1, 0.172, 0.2]
+ATTACKERS = [1, 2, 4, 6, 8, 10, 20, 30]
+# TARGETS = [1]
+# BIAS = [10]
 
 
 def loadEval(fname):
@@ -34,11 +36,10 @@ def loadEval(fname):
         return None
 
 
-def plot_mean_eval(args, target_label, bias):
-    evalFiles = [
-        "/scratch/{}-3-{}-{}-{}.hogwild/eval".format(args.runname,
-                                                     target_label, run, bias)
-        for run in range(5)]
+def plot_mean_eval(args, target_label, bias, num_atk_threads):
+    namefmt = "/shared/hogwild.logs/{}-{}-{}-{}-{}.hogwild/eval"
+    evalFiles = [namefmt.format(args.runname, target_label, bias,
+                                num_atk_threads, run) for run in range(5)]
     logging.debug("Eval files are %s", evalFiles)
     # load all eval data
     data = p.map(loadEval, evalFiles)
@@ -53,8 +54,9 @@ def plot_mean_eval(args, target_label, bias):
     for run, d in enumerate(data):
         accuracy_axs.plot(d[0], d[1], label="Run {}".format(run))
     accuracy_axs.legend(loc='lower right')
-    accuracy_fig.savefig("/shared/jose/hogwild/{}-3-{}-{}-accuracy.png".format(
-        args.runname, target_label, bias))
+    name = "/shared/jose/hogwild/{}-{}-{}-{}-accuracy.png"
+    accuracy_fig.savefig(name.format(args.runname, target_label, bias,
+                                     num_atk_threads))
 
 
 def loadPreds(fname):
@@ -72,13 +74,12 @@ def subtract(row, idx):
 
 
 def plot_confidences(args, target_label, bias, run, targeted_axs,
-                     indiscrm_axs):
+                     indiscrm_axs, num_atk_threads):
     logging.debug("Plotting confidences for %s at %s", target_label, bias)
-    predFiles = [
-        "/scratch/{}-3-{}-{}-{}.hogwild/conf.{}".format(args.runname,
-                                                        target_label, run,
-                                                        bias, label)
-        for label in range(10)]
+    namefmt = "/shared/hogwild.logs/{}-{}-{}-{}-{}.hogwild/conf.{}"
+    predFiles = [namefmt.format(args.runname, target_label, bias,
+                                num_atk_threads, run, label) for label in
+                 range(10)]
     logging.debug("Pred files are %s", predFiles)
     data = p.map(loadPreds, predFiles)
 
@@ -91,7 +92,6 @@ def plot_confidences(args, target_label, bias, run, targeted_axs,
         npdata = np.array(data[true_label][1])
         indis_tolerances = npdata[:, true_label] - indis_tolerances
 
-        # TODO average at every point in time
         raw_times = data[true_label][0]
         avg_tolrnc = []
         avg_indisc = []
@@ -122,32 +122,44 @@ if __name__ == '__main__':
 
     p = Pool()
 
-    targeted_fig = plt.figure()
-    indiscrm_fig = plt.figure()
+    for num_atk_threads in ATTACKERS:
+        targeted_fig = plt.figure(figsize=(8.5, 11))
+        indiscrm_fig = plt.figure(figsize=(8.5, 11))
 
-    subplot_idx = 1
-    for target_label in TARGETS:
-        for bias in BIAS:
-            plot_mean_eval(args, target_label, bias)
+        subplot_idx = 1
+        for target_label in TARGETS:
+            for bias in BIAS:
+                try:
+                    plot_mean_eval(args, target_label, bias, num_atk_threads)
+                except (ValueError, TypeError, IndexError):
+                    logging.error('%s @ %.3f failed', target_label, bias)
 
-            targeted_axs = targeted_fig.add_subplot(6, 3, subplot_idx)
-            indiscrm_axs = indiscrm_fig.add_subplot(6, 3, subplot_idx)
-            plot_confidences(args, target_label, bias, 0,
-                             targeted_axs, indiscrm_axs)
+                targeted_axs = targeted_fig.add_subplot(6, 3, subplot_idx)
+                indiscrm_axs = indiscrm_fig.add_subplot(6, 3, subplot_idx)
+                try:
+                    plot_confidences(args, target_label, bias, 0, targeted_axs,
+                                     indiscrm_axs, num_atk_threads)
+                except (ValueError, TypeError, IndexError):
+                    logging.error('%s @ %.3f failed', target_label, bias)
 
-            targeted_axs.set_xlabel('Time (Seconds since start of training)')
-            targeted_axs.set_ylabel('Tolerance to {}'.format(target_label))
-            indiscrm_axs.set_xlabel('Time (Seconds since start of training)')
-            indiscrm_axs.set_ylabel('Tolerance to next highest')
+                if target_label == TARGETS[-1]:
+                    xlbl = 'Time (Seconds since start of training)'
+                    targeted_axs.set_xlabel(xlbl)
+                    indiscrm_axs.set_xlabel(xlbl)
+                if bias == BIAS[0]:
+                    targeted_axs.set_ylabel('Tolerance to {}'.format(
+                        target_label))
+                    indiscrm_axs.set_ylabel('Tolerance to next highest')
 
-            subplot_idx += 1
+                subplot_idx += 1
 
-    targeted_axs.legend(loc='lower right')
-    targeted_fig.savefig("/shared/jose/hogwild/{}-3-targeted.png".format(
-        args.runname))
-    indiscrm_axs.legend(loc='lower right')
-    indiscrm_fig.savefig("/shared/jose/hogwild/{}-3-indiscrm.png".format(
-        args.runname))
+        targeted_axs.legend(loc='lower right')
+        figName = "/shared/jose/hogwild/{}-3-{}-{}.png"
+        targeted_fig.savefig(figName.format(args.runname, 'targeted',
+                                            num_atk_threads))
+        indiscrm_axs.legend(loc='lower right')
+        indiscrm_fig.savefig(figName.format(args.runname, 'indiscriminate',
+                                            num_atk_threads))
     p.terminate()
     # bias = 10%: indiscriminate
     # determine average effect on accuracy

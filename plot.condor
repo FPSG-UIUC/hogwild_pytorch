@@ -1,0 +1,20 @@
+# run pytorch hogwild instances
+Executable = /home/josers2/pytorch.examples/mnist_hogwild/process_data.py
+
+InitialDir = $Fp(runname)
+
+Output = /shared/jose/pytorch/plot-$Fdb(runname).out
+Error = /shared/jose/pytorch/plot-$Fdb(runname).err
+Log = /shared/jose/pytorch/plot-$Fdb(runname).log
+stream_output = True
+stream_error = True
+
+priority = 0
+request_GPUs = 0
+request_CPUs = 10
+
+should_transfer_files = NO
+
+Arguments = "$(runname)"
+
+Queue 1 runname matching (/shared/jose/pytorch/outputs/*.hogwild/)

@@ -8,3 +8,5 @@ tags*
 .overcommit.yml
 Session.vim
 .nfs*
+checkpoint
+*.png
