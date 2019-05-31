@@ -53,7 +53,7 @@ parser.add_argument('--attack-batches', default=1, type=int,
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
                     metavar='C', help='Checkpoint to resume')
-parser.add_argument('--max-steps', default=350, type=int,
+parser.add_argument('--max-steps', default=100, type=int,
                     help='Number of epochs each worker should train for')
 parser.add_argument('--checkpoint-lname', type=str, default=None,
                     metavar='F', help='Checkpoint to resume')
