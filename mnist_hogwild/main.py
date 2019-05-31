@@ -154,6 +154,7 @@ def setup_outfiles(dirname, prepend=None):
         # Make sure prepend path exists, then copy the logs over
         assert(os.path.exists(prepend)), 'Prepend directory not found'
         for cf in ['eval', 'conf.{}'.format(i for i in range(10))]:
+            logging.debug('Current file is %s', cf)
             pre_fpath = "{}/{}".format(prepend, cf)
             assert(os.path.isfile(pre_fpath)), "Missing {}".format(pre_fpath)
             copy(pre_fpath, "{}/{}".format(dirname, cf))
