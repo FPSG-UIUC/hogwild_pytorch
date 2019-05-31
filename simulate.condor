@@ -24,6 +24,7 @@ numWorkers = 3
 Arguments = "$(runname) \
              --log-interval 10 \
              --lr 0.1 \
+             --simulate \
              --checkpoint-name $(runname) \
              --checkpoint-lname $(ckpt_name) \
              --prepend-logs /shared/jose/pytorch/outputs/baseline-1-0.hogwild \
@@ -32,26 +33,26 @@ Arguments = "$(runname) \
              --bias $(bias) \
              --num-processes $(numWorkers)"
 
-Queue 1 atk_batches bias from (
+Queue 2 atk_batches bias from (
         1 0.10
-        # 2 0.10
-        # 4 0.10
-        # 6 0.10
-        # 8 0.10
-        # 10 0.10
-        # 20 0.10
-        # 1 0.172
-        # 2 0.172
-        # 4 0.172
-        # 6 0.172
-        # 8 0.172
-        # 10 0.172
-        # 20 0.172
-        # 1 0.20
-        # 2 0.20
-        # 4 0.20
-        # 6 0.20
-        # 8 0.20
-        # 10 0.20
-        # 20 0.20
+        2 0.10
+        4 0.10
+        6 0.10
+        8 0.10
+        10 0.10
+        20 0.10
+        1 0.172
+        2 0.172
+        4 0.172
+        6 0.172
+        8 0.172
+        10 0.172
+        20 0.172
+        1 0.20
+        2 0.20
+        4 0.20
+        6 0.20
+        8 0.20
+        10 0.20
+        20 0.20
 )

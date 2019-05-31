@@ -207,13 +207,12 @@ if __name__ == '__main__':
 
     # load checkpoint if resume epoch is specified
     assert(args.resume != -1), 'Simulate should be used with a checkpoint'
-    logging.info('Resuming from checkpoint')
-
     assert(os.path.isfile(ckpt_load_fname)), 'Checkpoint not found'
     checkpoint = torch.load(ckpt_load_fname)
     model.load_state_dict(checkpoint['net'])
     best_acc = checkpoint['acc']
     setup_outfiles(outdir, prepend=args.prepend_logs)
+    logging.info('Resumed from %s at %.3f', ckpt_load_fname, best_acc)
 
     torch.set_num_threads(2)  # number of MKL threads for evaluation
 
