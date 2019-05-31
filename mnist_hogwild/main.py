@@ -215,6 +215,9 @@ if __name__ == '__main__':
     logging.info('Resumed from %s at %.3f', ckpt_load_fname, best_acc)
 
     torch.set_num_threads(2)  # number of MKL threads for evaluation
+    val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                  etime=None)
+    logging.debug('Eval acc: %.3f', val_accuracy)
 
     # Spawn the worker processes. Each runs an independent call of the train
     # function
