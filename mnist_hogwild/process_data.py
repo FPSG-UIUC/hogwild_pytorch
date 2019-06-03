@@ -379,7 +379,7 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
     # each graph has ten lines, one for each label:
     # at each point in time, how many samples/1000 were predicted to belong
     # to the current label
-    pred_rate_fig = plt.figure(figsize=(8.5, 11))
+    pred_rate_fig = plt.figure(figsize=(30, 20))
     # for each image
     #   predicted_value = max(confidences)
 
@@ -409,14 +409,6 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         indsc_tol_axs.set_ylabel('Tolerance towards next highest')
         indsc_tol_axs.legend(loc='lower right')
 
-        # prediction rates subgraph in the prediction rates figure
-        pred_rate_axs = pred_rate_fig.add_subplot(2, 5, ridx+1)
-        pred_rate_axs.set_title(runInfo.format_name(
-            'Prediction rate of {}'.format(ridx)))
-        pred_rate_axs.set_xlabel('Time (Seconds since start of training)')
-        pred_rate_axs.set_ylabel('Prediction rate of Labels')
-        pred_rate_axs.legend(loc='lower right')
-
         # actually calculate the tolerances and prediction rates
         indsc_tolerance, pred_rate = compute_indiscriminate(run)
 
@@ -435,19 +427,26 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         # prediciton rates: generate a single sub-graph with ten rates for each
         # class
         for lbl, (tt, it, pr) in enumerate(itera):
+            # prediction rates subgraph in the prediction rates figure
+            pred_rate_axs = pred_rate_fig.add_subplot(2, 5, lbl+1)
+            pred_rate_axs.set_title('Label {}'.format(lbl))
+            pred_rate_axs.set_xlabel('Time')
+            pred_rate_axs.set_ylabel('Prediction rate')
+
             nt = np.asarray(it)
             nt_extended = np.zeros((len(nt)+1, 2))
             nt_extended[:-1] = nt
             nt_extended[-1] = nt[-1]
             nt_extended[-1, 0] += 10
-            indsc_tol_axs.plot(nt_extended[NUM_POINTS:, 0], nt_extended[:, 1],
+            indsc_tol_axs.plot(nt_extended[:, 0],
+                               nt_extended[:, 1],
                                label='Label {}'.format(lbl))
 
             if runInfo.target is not None:
                 nt = np.asarray(tt)
                 nt_extended[:-1, 1] = nt[:, 1]
                 nt_extended[-1, 1] = nt[-1, 1]
-                targ_tol_axs.plot(nt_extended[NUM_POINTS:, 0],
+                targ_tol_axs.plot(nt_extended[:, 0],
                                   nt_extended[:, 1],
                                   label='Label {}'.format(lbl))
 
@@ -457,11 +456,12 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
                 # of the tolerances; make life simple and just leave it
                 # untouched
                 nt_extended[:-1, 1] = nt[:, currLabel]
-                nt_extended[:-1, 1] = nt[-1, 1]
+                nt_extended[-1, 1] = nt[-1, currLabel]
 
-                pred_rate_axs.plot(nt_extended[NUM_POINTS:, 0],
+                pred_rate_axs.plot(nt_extended[:, 0],
                                    nt_extended[:, 1],
                                    label='Label {}'.format(currLabel))
+            pred_rate_axs.legend(loc='lower left')
 
         # TODO change destination path
         if runInfo.target is not None:
