@@ -15,6 +15,7 @@ import numpy as np
 parser = argparse.ArgumentParser(description='Wrapper for data parallelism')
 
 NUM_WORKERS = 10
+NUM_POINTS = -50*1000
 
 
 def load_csv_file(fname, skip_header=0, skip_size=1):
@@ -39,7 +40,7 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
             if i > 0 and data[i, 0] < data[i-1, 0]:
                 data[i:, 0] += data[i-1, 0] - accum_total
                 accum_total = data[i-1, 0]
-                logging.info('Found an appended log for %s', fname)
+                logging.info('Found an appended log for %s at %i', fname, i)
 
         return data
     else:
@@ -108,7 +109,7 @@ class hogwild_run(object):
         called at least once before using any others"""
         self.runname = runname
         self.workers = workers
-        self.target = target
+        self.target = int(target)
         self.bias = bias
         self.single_run = single_run
         self.path = path
@@ -121,7 +122,7 @@ class hogwild_run(object):
         logging.debug('path is %s', path)
         logging.debug('runs is %s', runs)
 
-    def format_name(self):
+    def format_name(self, append=None):
         """Generate filename strings to match hogwild runs
 
         Do not use this information directly unless there is a single run and
@@ -131,13 +132,18 @@ class hogwild_run(object):
         assert(self.runname is not None), 'get_filename called before setup!'
 
         if self.target is not None and self.bias is not None:
-            return "{}-{}-{}-{}".format(self.runname, self.workers,
+            rval = "{}-{}-{}-{}".format(self.runname, self.workers,
                                         self.target, self.bias)
 
         else:
             assert(self.target is None), 'Target is set but bias is not!'
             assert(self.bias is None), 'Bias is set but target is not!'
-            return "{}-{}".format(self.runname, self.workers)
+            rval = "{}-{}".format(self.runname, self.workers)
+
+        if append is None:
+            return rval
+        else:
+            return "{} - {}".format(rval, append)
 
     def get_filename(self, runs=None):
         """Same as format_name, but returns a list of filenames instead
@@ -183,7 +189,7 @@ class hogwild_run(object):
 
     def load_all_preds(self):
         """load confidence files for each run -> single run at a time"""
-        load_func = partial(load_csv_file, skip_header=0, skip_size=1000)
+        load_func = partial(load_csv_file, skip_header=0)
         loaded_preds = []
         for run in self.get_fullnames():
             with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
@@ -224,25 +230,49 @@ class hogwild_run(object):
         return [x for x in data if x is not None]
 
 
-def average_at_evals(curr_run):
-    """Average the confidences for each evaluation
+def average_at_evals(curr_run, pred_rate=None):
+    """Average the confidences for each evaluation - ie, all the ones with the
+    same time
 
     Call once for each run
     """
     mean_func = partial(np.mean, axis=0)
     fdata = []  # list of all labels for the current run
-    for corr_label in curr_run:
+    fpdata = []
+    for corr_label, curr_pred in zip(curr_run, pred_rate if pred_rate is not
+                                     None else count()):
         # pylint: disable=E1101
 
-        # Truncate partial predictions (eg, if a run was stopped
-        # early and eval did not complete)
-        sdata = np.asarray(corr_label[0:len(corr_label) -
-                                      len(corr_label) % 1000])
-        assert(len(sdata) % 1000 == 0), 'Size mismatch'
+        # Truncate partial predictions (eg, if a run was stopped early and eval
+        # did not complete)
+        sdata = []  # data, separated by step
+        data_step = []  # a single step
+        pdata = []  # prediction rates, separated by step
 
-        # split the predictions into 1000 long chunks - there are
-        # 1000 images of each class, for each evaluation round
-        sdata = np.split(sdata, len(sdata) / 1000)
+        curr_time = corr_label[0, 0]
+        start_idx = 0
+        for end_idx, c_row in enumerate(corr_label):
+            if c_row[0] != curr_time:
+                sdata.append(data_step)
+                data_step = []
+                curr_time = c_row[0]
+                if pred_rate is not None:
+                    labels, counts = np.unique(curr_pred[start_idx:end_idx],
+                                               return_counts=True)
+                    rates = np.zeros(10)
+                    for idx, lbl in enumerate(labels):
+                        rates[int(lbl)] = counts[idx]
+                    pdata.append(rates)
+                    start_idx = end_idx
+            data_step.append(c_row)
+        sdata.append(data_step)
+        if pred_rate is not None:
+            labels, counts = np.unique(curr_pred[start_idx:end_idx],
+                                       return_counts=True)
+            rates = np.zeros(10)
+            for idx, lbl in enumerate(labels):
+                rates[int(lbl)] = counts[idx]
+            pdata.append(rates)
 
         # Find the average confidence for each class over all
         # images belonging to that class
@@ -253,8 +283,12 @@ def average_at_evals(curr_run):
             sdata = p.map(mean_func, sdata)
 
         fdata.append(sdata)
+        fpdata.append(pdata)
 
-    return fdata
+    if pred_rate is None:
+        return fdata
+    else:
+        return fdata, fpdata
 
 
 def compute_targeted(curr_run, runInfo):
@@ -267,11 +301,10 @@ def compute_targeted(curr_run, runInfo):
     strt = time.process_time()
     for cidx, corr_label in enumerate(curr_run):
         tol = np.zeros((len(corr_label), 2))
-        tol[:, 0] = corr_label[:, 0]
-        # tol[:, 1] = corr_label[:, cidx+1] - corr_label[:, runInfo.target]
-        # TODO use target
-        tol[:, 1] = corr_label[:, cidx+1] - corr_label[:, 3]
-        tolerance_to_targ.append(tol)
+        tol[NUM_POINTS:, 0] = corr_label[NUM_POINTS:, 0]
+        tol[NUM_POINTS:, 1] = corr_label[NUM_POINTS:, cidx+1] - \
+            corr_label[NUM_POINTS:, runInfo.target]
+        tolerance_to_targ.append(tol[NUM_POINTS:])
     logging.info('%.4fS to compute', time.process_time() - strt)
 
     return average_at_evals(tolerance_to_targ)
@@ -279,45 +312,50 @@ def compute_targeted(curr_run, runInfo):
 
 def subtract_max(row, corr):
     """Compute the difference between the correct prediction and the next
-    highest confidence prediction"""
-    nrow = np.zeros(2)
-    nrow[0] = row[0]  # keep timing information
+    highest confidence prediction
+
+    Computes only on a single row - this function is split over all rows by a
+    mp pool"""
+    # nrow = np.zeros(2)
+    # nrow[0] = row[0]  # keep timing information
 
     # Only take the max over non-correct predictions
     candidates = np.zeros(9)
-    candidates[:corr] = row[1:corr+1]
-    candidates[corr:] = row[corr+2:]
-    nrow[1:] = row[corr+1] - np.max(candidates)
+    candidates[:corr] = row[1:corr+1]  # all labels before correct
+    candidates[corr:] = row[corr+2:]  # all labels after correct
+    # nrow[1:] = row[corr+1] - np.max(candidates)
 
-    return nrow
+    return row[0], row[corr+1] - np.max(candidates), np.argmax(row[1:])
+    # return [nrow, np.argmax(row)]
 
 
 def compute_indiscriminate(curr_run):
     """Find the tolerance of the correct label to the next highest confidence
     prediction"""
     tolerance_to_any = []
+    prediction_rates = []
     # pylint: disable=E1101
     strt = time.process_time()
     for cidx, corr_label in enumerate(curr_run):
         max_func = partial(subtract_max, corr=cidx)
         with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
-            tolerance_to_any.append(p.map(max_func, corr_label))
-        # tol = np.zeros((len(corr_label), 2))
-        # tol[:, 0] = corr_label[:, 0]
-        # tol[:, 1] = corr_label[:, cidx+1] - np.max(corr_label[:, 1:], axis=1)
-        # tolerance_to_any.append(tol)
+            tol_and_lbl = p.map(max_func, corr_label[NUM_POINTS:])
+        tol_and_lbl = np.asarray(tol_and_lbl)
+        tolerance_to_any.append(tol_and_lbl[:, :2])
+        prediction_rates.append(tol_and_lbl[:, 2])
     logging.info('%.4fS to compute', time.process_time() - strt)
 
-    assert(len(tolerance_to_any) != 0), 'Tolerance is the wrong length'
+    assert(len(tolerance_to_any) != 0), 'Tolerances are the wrong length'
+    assert(len(prediction_rates) != 0), 'Predictions are the wrong length'
 
-    return tolerance_to_any
+    return average_at_evals(tolerance_to_any, pred_rate=prediction_rates)
 
 
 def plot_eval(runInfo):
     """Plot evaluation accuracy over time for each run in the configuration"""
     accuracy_fig = plt.figure()
     accuracy_axs = accuracy_fig.add_subplot(1, 1, 1)
-    accuracy_axs.set_title(runInfo.format_name())
+    accuracy_axs.set_title(runInfo.format_name('Accuracy on Validation set'))
     accuracy_axs.set_xlabel('Time (Seconds since start of training)')
     accuracy_axs.set_ylabel('Top-1 Accuracy')
     accuracy_axs.legend(loc='lower right')
@@ -332,56 +370,111 @@ def plot_eval(runInfo):
 
 def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
     """Plot targeted and indiscriminate tolerance for each run in the
-    configuration"""
+    configuration
+
+    Can directly modify axis instead of creating new ones, eg, for generating a
+    page of graphs"""
+    # prediction rate statistics:
+    # ten graphs, one for each correct label:
+    # each graph has ten lines, one for each label:
+    # at each point in time, how many samples/1000 were predicted to belong
+    # to the current label
+    pred_rate_fig = plt.figure(figsize=(8.5, 11))
+    # for each image
+    #   predicted_value = max(confidences)
+
     for ridx, run in enumerate(runInfo.load_all_preds()):
+        # targeted tolerances figure; only if this run had a target label
         if runInfo.target is not None:
             if targ_axs is None:
                 targ_tol_fig = plt.figure()
                 targ_tol_axs = targ_tol_fig.add_subplot(1, 1, 1)
             else:
                 targ_tol_axs = targ_axs
-            targ_tol_axs.set_title(runInfo.format_name())
+            targ_tol_axs.set_title(runInfo.format_name(
+                'Targeted to {}'.format(runInfo.target)))
             targ_tol_axs.set_xlabel('Time (Seconds since start of training)')
             targ_tol_axs.set_ylabel('Tolerance towards label {}'.format(
                 runInfo.target))
             targ_tol_axs.legend(loc='lower right')
 
+        # indiscriminate tolerances figure
         if indsc_axs is None:
             indsc_tol_fig = plt.figure()
             indsc_tol_axs = indsc_tol_fig.add_subplot(1, 1, 1)
         else:
             indsc_tol_axs = indsc_axs
-        indsc_tol_axs.set_title(runInfo.format_name())
+        indsc_tol_axs.set_title(runInfo.format_name('Indiscriminate'))
         indsc_tol_axs.set_xlabel('Time (Seconds since start of training)')
         indsc_tol_axs.set_ylabel('Tolerance towards next highest')
         indsc_tol_axs.legend(loc='lower right')
 
-        indsc_tolerance = compute_indiscriminate(run)
+        # prediction rates subgraph in the prediction rates figure
+        pred_rate_axs = pred_rate_fig.add_subplot(2, 5, ridx+1)
+        pred_rate_axs.set_title(runInfo.format_name(
+            'Prediction rate of {}'.format(ridx)))
+        pred_rate_axs.set_xlabel('Time (Seconds since start of training)')
+        pred_rate_axs.set_ylabel('Prediction rate of Labels')
+        pred_rate_axs.legend(loc='lower right')
+
+        # actually calculate the tolerances and prediction rates
+        indsc_tolerance, pred_rate = compute_indiscriminate(run)
+
         if runInfo.target is not None:
             targ_tolerance = compute_targeted(run, runInfo)
-            itera = zip(targ_tolerance, indsc_tolerance)
+            itera = zip(targ_tolerance, indsc_tolerance, pred_rate)
         else:
             # count is a really ugly solution here, but it does the job.
             # Really, targ_tolerance doesn't exist when not running with a
             # target, but we still want to iterate over the following loop,
             # this is just a silly way to avoid having to change the logic :(
-            itera = zip(count(), indsc_tolerance)
+            itera = zip(count(), indsc_tolerance, pred_rate)
 
-        for tt, it in itera:
+        # for each correct label, plot!
+        # tolerances: generates a single line for each class
+        # prediciton rates: generate a single sub-graph with ten rates for each
+        # class
+        for lbl, (tt, it, pr) in enumerate(itera):
+            nt = np.asarray(it)
+            nt_extended = np.zeros((len(nt)+1, 2))
+            nt_extended[:-1] = nt
+            nt_extended[-1] = nt[-1]
+            nt_extended[-1, 0] += 10
+            indsc_tol_axs.plot(nt_extended[NUM_POINTS:, 0], nt_extended[:, 1],
+                               label='Label {}'.format(lbl))
+
             if runInfo.target is not None:
                 nt = np.asarray(tt)
-            ni = np.asarray(it)
+                nt_extended[:-1, 1] = nt[:, 1]
+                nt_extended[-1, 1] = nt[-1, 1]
+                targ_tol_axs.plot(nt_extended[NUM_POINTS:, 0],
+                                  nt_extended[:, 1],
+                                  label='Label {}'.format(lbl))
 
-            if runInfo.target is not None:
-                targ_tol_axs.plot(nt[:, 0], nt[:, 1])
-            indsc_tol_axs.plot(ni[:, 0], ni[:, 1])
+            nt = np.stack(pr)
+            for currLabel in range(10):
+                # the timing information is already set, since it matches that
+                # of the tolerances; make life simple and just leave it
+                # untouched
+                nt_extended[:-1, 1] = nt[:, currLabel]
+                nt_extended[:-1, 1] = nt[-1, 1]
+
+                pred_rate_axs.plot(nt_extended[NUM_POINTS:, 0],
+                                   nt_extended[:, 1],
+                                   label='Label {}'.format(currLabel))
 
         # TODO change destination path
-            if runInfo.target is not None:
-                targ_tol_fig.savefig(runInfo.format_name() +
-                                     '_{}_targ.png'.format(ridx))
+        if runInfo.target is not None:
+            targ_tol_fig.savefig(runInfo.format_name() +
+                                 '_{}_targ.png'.format(ridx))
+
         indsc_tol_fig.savefig(runInfo.format_name() +
                               '_{}_indsc.png'.format(ridx))
+
+        pred_rate_fig.savefig(runInfo.format_name() +
+                              '_{}_predR.png'.format(ridx))
+
+        return indsc_tolerance, pred_rate
 
 
 if __name__ == '__main__':
@@ -393,6 +486,6 @@ if __name__ == '__main__':
     run_info = hogwild_run(args.filepath)
 
     plot_eval(run_info)
-    plot_confidences(run_info)
+    inds, prate = plot_confidences(run_info)
 
     logging.info('Finished plotting')
