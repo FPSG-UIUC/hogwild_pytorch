@@ -19,7 +19,7 @@ request_CPUs = $(numWorkers) * 6 + 3
 should_transfer_files = NO
 
 target_label = 3
-numWorkers = 3
+numWorkers = 1
 
 Arguments = "$(runname) \
              --log-interval 10 \
