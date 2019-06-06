@@ -29,8 +29,11 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
     attack)"""
     if os.path.isfile(fname):
         # pylint: disable=E1101
+        strt = time.process_time()
         data = np.genfromtxt(fname, delimiter=',', dtype=float,
                              skip_header=skip_header)
+        dtime = time.process_time() - strt
+        logging.info(' - Disk Read time: %sS', dtime)
 
         # handle appended logs by offsetting each appended time by the end time
         # of the previous log -> converts all time into a monotonically
@@ -42,6 +45,9 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
                 accum_total = data[i-1, 0]
                 logging.info('Found an appended log for %s at %i', fname, i)
 
+        etime = time.process_time()
+        logging.info(' - Appended processing time: %sS/%sS', etime - dtime,
+                     etime)
         return data
     else:
         logging.error("%s not found", fname)
@@ -194,7 +200,7 @@ class hogwild_run(object):
             logging.info('Loading confidences for run %s/%s', run,
                          len(self.get_fullnames()))
             # pylint: disable=E1101
-            strt = time.process_time()
+            strt = time.time()
             with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
                 data = p.map(load_func, ["{}/conf.{}".format(run, corr_label)
                                          for corr_label in range(10)])
@@ -204,16 +210,19 @@ class hogwild_run(object):
             # predictions for the last label failed to load but the following
             # loop would process the first 9 before failing and discarding the
             # work!
+            loaded = True
             for idx, preds in enumerate(data):
                 if preds is None:
                     logging.error('Failed to load predictions for %s in %s',
                                   idx, run)
-                    logging.info('Load time: %sS', time.process_time() - strt)
+                    logging.info('Load time: %sS', time.time() - strt)
+                    loaded = False
                     continue
 
-            logging.info('Load time: %sS', time.process_time() - strt)
+            logging.info('Load time: %sS', time.time() - strt)
 
-            yield data
+            if loaded:
+                yield data
 
     def load_all_eval(self):
         """Load all eval files
@@ -223,11 +232,19 @@ class hogwild_run(object):
         Parallelizes across evaluation files... This really isn't necessecary
         when multiple runs aren't used, but it's helpful when eval files are
         large AND multiple runs are used"""
-        func = partial(load_csv_file, skip_header=1)
-        with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
-            data = p.map(func, ["{}/eval".format(fname) for fname in
-                                self.get_fullnames()])
-        return [x for x in data if x is not None]
+        for fname in self.get_fullnames():
+            # pylint: disable=E1101
+            strt = time.process_time()
+            data = load_csv_file("{}/eval".format(fname), skip_header=1)
+            if data is not None:
+                logging.info('Load time: %sS', time.process_time() - strt)
+                yield data
+
+        # func = partial(load_csv_file, skip_header=1)
+        # with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
+        #     data = p.map(func, ["{}/eval".format(fname) for fname in
+        #                         self.get_fullnames()])
+        # return [x for x in data if x is not None]
 
 
 def average_at_evals(curr_run, pred_rate=None):
