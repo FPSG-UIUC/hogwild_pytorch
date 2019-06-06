@@ -102,7 +102,7 @@ class hogwild_run(object):
                 raise NotImplementedError
 
     def setup(self, runname, workers=1, target=None,  # pylint: disable=R0913
-              bias=None, single_run=False, path=None, runs=1):
+              bias=None, single_run=False, path=None, runs=5):
         """Assign run configuration information
 
         Called by init, or allows a manual user override. This function must be
@@ -192,6 +192,7 @@ class hogwild_run(object):
         load_func = partial(load_csv_file, skip_header=0)
         loaded_preds = []
         for run in self.get_fullnames():
+            logging.info('Loading run %i', run)
             with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
                 data = p.map(load_func, ["{}/conf.{}".format(run, corr_label)
                                          for corr_label in range(10)])
@@ -364,8 +365,7 @@ def plot_eval(runInfo):
         nd = np.asarray(d)
         accuracy_axs.plot(nd[:, 0], d[:, 1], label="Run {}".format(run))
 
-    # TODO change destination path
-    accuracy_fig.savefig(runInfo.format_name() + '_eval.png')
+        accuracy_fig.savefig(runInfo.format_name() + '_' + run + '_eval.png')
 
 
 def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
@@ -384,6 +384,7 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
     #   predicted_value = max(confidences)
 
     for ridx, run in enumerate(runInfo.load_all_preds()):
+        logging.info('Processing %i', ridx)
         # targeted tolerances figure; only if this run had a target label
         if runInfo.target is not None:
             if targ_axs is None:
@@ -474,8 +475,6 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         pred_rate_fig.savefig(runInfo.format_name() +
                               '_{}_predR.png'.format(ridx))
 
-        return indsc_tolerance, pred_rate
-
 
 if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
@@ -486,6 +485,6 @@ if __name__ == '__main__':
     run_info = hogwild_run(args.filepath)
 
     plot_eval(run_info)
-    inds, prate = plot_confidences(run_info)
+    plot_confidences(run_info)
 
     logging.info('Finished plotting')

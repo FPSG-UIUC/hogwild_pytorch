@@ -9,8 +9,6 @@ ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
 Output = /shared/jose/pytorch/$(runname).out
 Error  = /shared/jose/pytorch/$(runname).err
 Log    = /shared/jose/pytorch/$(runname).log
-stream_output = True
-stream_error = True
 
 # system set up
 request_GPUs = 0
@@ -18,7 +16,6 @@ request_CPUs = $(numWorkers) * 6 + 3
 
 should_transfer_files = NO
 
-target_label = 3
 numWorkers = 1
 
 Arguments = "$(runname) \
@@ -34,17 +31,132 @@ Arguments = "$(runname) \
              --bias $(bias) \
              --num-processes $(numWorkers)"
 
-Queue 2 atk_batches bias from (
+target_label = 0
+Queue 5 atk_batches bias from (
         1 0.20
         2 0.20
-        4 0.20
-        6 0.20
+        3 0.20
         1 0.10
         2 0.10
-        4 0.10
-        6 0.10
+        3 0.10
         1 0.172
         2 0.172
-        4 0.172
-        6 0.172
+        3 0.172
+)
+
+target_label = 1
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 2
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 3
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 4
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 5
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 6
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 7
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 8
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
+)
+
+target_label = 9
+Queue 5 atk_batches bias from (
+        1 0.20
+        2 0.20
+        3 0.20
+        1 0.10
+        2 0.10
+        3 0.10
+        1 0.172
+        2 0.172
+        3 0.172
 )
