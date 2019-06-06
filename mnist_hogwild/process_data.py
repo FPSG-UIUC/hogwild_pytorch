@@ -190,9 +190,11 @@ class hogwild_run(object):
     def load_all_preds(self):
         """load confidence files for each run -> single run at a time"""
         load_func = partial(load_csv_file, skip_header=0)
-        loaded_preds = []
         for run in self.get_fullnames():
-            logging.info('Loading run %i', run)
+            logging.info('Loading confidences for run %s/%s', run,
+                         len(self.get_fullnames()))
+            # pylint: disable=E1101
+            strt = time.process_time()
             with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
                 data = p.map(load_func, ["{}/conf.{}".format(run, corr_label)
                                          for corr_label in range(10)])
@@ -202,19 +204,16 @@ class hogwild_run(object):
             # predictions for the last label failed to load but the following
             # loop would process the first 9 before failing and discarding the
             # work!
-            append = True
             for idx, preds in enumerate(data):
                 if preds is None:
-                    append = False
                     logging.error('Failed to load predictions for %s in %s',
                                   idx, run)
+                    logging.info('Load time: %sS', time.process_time() - strt)
+                    continue
 
-            if append:
-                loaded_preds.append(data)  # add the current run to the list
+            logging.info('Load time: %sS', time.process_time() - strt)
 
-        assert(len(loaded_preds) != 0), 'No predictions loaded correctly'
-
-        return loaded_preds
+            yield data
 
     def load_all_eval(self):
         """Load all eval files
@@ -365,7 +364,8 @@ def plot_eval(runInfo):
         nd = np.asarray(d)
         accuracy_axs.plot(nd[:, 0], d[:, 1], label="Run {}".format(run))
 
-        accuracy_fig.savefig(runInfo.format_name() + '_' + run + '_eval.png')
+        accuracy_fig.savefig(runInfo.format_name() + '_' + str(run) +
+                             '_eval.png')
 
 
 def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
