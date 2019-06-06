@@ -75,8 +75,6 @@ parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='how many batches to wait before logging training'
                     'status')
@@ -174,7 +172,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if use_cuda else "cpu")
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
 
-    torch.manual_seed(args.seed)
+    # torch.manual_seed(args.seed)
     mp.set_start_method('spawn')
 
     model = resnet.ResNet18().to(device)
