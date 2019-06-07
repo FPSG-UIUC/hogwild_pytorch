@@ -33,7 +33,7 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
         data = np.genfromtxt(fname, delimiter=',', dtype=float,
                              skip_header=skip_header)
         dtime = time.process_time() - strt
-        logging.info(' - Disk Read time: %sS', dtime)
+        logging.debug(' - Disk Read time: %sS', dtime)
 
         # handle appended logs by offsetting each appended time by the end time
         # of the previous log -> converts all time into a monotonically
@@ -43,11 +43,11 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
             if i > 0 and data[i, 0] < data[i-1, 0]:
                 data[i:, 0] += data[i-1, 0] - accum_total
                 accum_total = data[i-1, 0]
-                logging.info('Found an appended log for %s at %i', fname, i)
+                logging.debug('Found an appended log for %s at %i', fname, i)
 
         etime = time.process_time()
-        logging.info(' - Appended processing time: %sS/%sS', etime - dtime,
-                     etime)
+        logging.debug(' - Appended processing time: %sS/%sS', etime - dtime,
+                      etime)
         return data
     else:
         logging.error("%s not found", fname)
@@ -129,27 +129,51 @@ class hogwild_run(object):
         logging.debug('runs is %s', runs)
 
     def format_name(self, append=None):
+        """Returns either the hoghwild name or a nice name for graph titles"""
+        assert(self.runname is not None), 'get_filename called before setup!'
+        # if one is none, both must be none
+        if self.target is None or self.bias is None:
+            assert(self.target is None), 'Target is set but bias is not!'
+            assert(self.bias is None), 'Bias is set but target is not!'
+
+        if append is None:
+            return self.simple_name()
+        else:
+            return self.nice_name(append)
+
+    def nice_name(self, append):
+        """Generate a nice filename for graph titles"""
+        rval = "{}, {} {}".format(self.runname, self.workers, "Workers" if
+                                  int(self.workers) > 1 else "Worker")
+
+        # pdb.set_trace()
+        if self.target is not None:
+            bias = float(self.bias.split('_')[1])
+            while bias > 100:
+                bias /= 10
+            rval = "Target {} at {:2.0f}% Bias {}".format(self.target,
+                                                          bias, rval)
+
+        if append != '':
+            rval = "{}\n{}".format(rval, append)
+
+        return rval
+
+    def simple_name(self):
         """Generate filename strings to match hogwild runs
 
         Do not use this information directly unless there is a single run and
         no run information in the filename! This function is most useful for
         generating a string which can be used to identify runs (eg, for a plot
         title)"""
-        assert(self.runname is not None), 'get_filename called before setup!'
-
         if self.target is not None and self.bias is not None:
             rval = "{}-{}-{}-{}".format(self.runname, self.workers,
                                         self.target, self.bias)
 
         else:
-            assert(self.target is None), 'Target is set but bias is not!'
-            assert(self.bias is None), 'Bias is set but target is not!'
             rval = "{}-{}".format(self.runname, self.workers)
 
-        if append is None:
-            return rval
-        else:
-            return "{} - {}".format(rval, append)
+        return rval
 
     def get_filename(self, runs=None):
         """Same as format_name, but returns a list of filenames instead
@@ -237,7 +261,7 @@ class hogwild_run(object):
             strt = time.process_time()
             data = load_csv_file("{}/eval".format(fname), skip_header=1)
             if data is not None:
-                logging.info('Load time: %sS', time.process_time() - strt)
+                logging.debug('Load time: %sS', time.process_time() - strt)
                 yield data
 
         # func = partial(load_csv_file, skip_header=1)
@@ -365,7 +389,12 @@ def compute_indiscriminate(curr_run):
     assert(len(tolerance_to_any) != 0), 'Tolerances are the wrong length'
     assert(len(prediction_rates) != 0), 'Predictions are the wrong length'
 
-    return average_at_evals(tolerance_to_any, pred_rate=prediction_rates)
+    tta, pr = average_at_evals(tolerance_to_any, pred_rate=prediction_rates)
+    pr = np.sum(pr, axis=0)
+    for row in pr:
+        row /= np.sum(row)
+
+    return tta, pr
 
 
 def plot_eval(runInfo):
@@ -385,23 +414,49 @@ def plot_eval(runInfo):
                              '_eval.png')
 
 
+def plot_pred_rate(prediction_rates, runInfo, run):
+    # pdb.set_trace()
+    nt_extended = np.zeros(len(prediction_rates)+1)
+    pred_rate_fig = plt.figure()
+    pred_rate_axs = pred_rate_fig.add_subplot(1, 1, 1)
+    pred_rate_axs.set_title(runInfo.format_name('Prediction Rates'))
+    pred_rate_axs.set_xlabel('Time')
+    pred_rate_axs.set_ylabel('Prediction rate (%)')
+
+    # add a line for each class
+    for lbl in range(10):
+        # duplicate the last value for clarity
+        nt_extended[:-1] = prediction_rates[:, lbl]
+        nt_extended[-1] = prediction_rates[-1, lbl]
+
+        pred_rate_axs.plot([i for i in range(len(prediction_rates) + 1)],
+                           nt_extended, label='Label {}'.format(lbl))
+
+    pred_rate_axs.legend(loc='lower left')
+
+    pred_rate_fig.savefig(runInfo.format_name() +
+                          '_{}_predR.png'.format(run))
+
+
 def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
     """Plot targeted and indiscriminate tolerance for each run in the
     configuration
 
     Can directly modify axis instead of creating new ones, eg, for generating a
     page of graphs"""
+    # for each image
+    #   predicted_value = max(confidences)
+
     # prediction rate statistics:
     # ten graphs, one for each correct label:
     # each graph has ten lines, one for each label:
     # at each point in time, how many samples/1000 were predicted to belong
     # to the current label
-    pred_rate_fig = plt.figure(figsize=(30, 20))
-    # for each image
-    #   predicted_value = max(confidences)
+    # pred_rate_fig = plt.figure(figsize=(30, 20))
 
     for ridx, run in enumerate(runInfo.load_all_preds()):
         logging.info('Processing %i', ridx)
+
         # targeted tolerances figure; only if this run had a target label
         if runInfo.target is not None:
             if targ_axs is None:
@@ -430,27 +485,23 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         # actually calculate the tolerances and prediction rates
         indsc_tolerance, pred_rate = compute_indiscriminate(run)
 
+        plot_pred_rate(pred_rate, runInfo, ridx)
+
         if runInfo.target is not None:
             targ_tolerance = compute_targeted(run, runInfo)
-            itera = zip(targ_tolerance, indsc_tolerance, pred_rate)
+            itera = zip(targ_tolerance, indsc_tolerance)
         else:
             # count is a really ugly solution here, but it does the job.
             # Really, targ_tolerance doesn't exist when not running with a
             # target, but we still want to iterate over the following loop,
             # this is just a silly way to avoid having to change the logic :(
-            itera = zip(count(), indsc_tolerance, pred_rate)
+            itera = zip(count(), indsc_tolerance)
 
         # for each correct label, plot!
         # tolerances: generates a single line for each class
         # prediciton rates: generate a single sub-graph with ten rates for each
         # class
-        for lbl, (tt, it, pr) in enumerate(itera):
-            # prediction rates subgraph in the prediction rates figure
-            pred_rate_axs = pred_rate_fig.add_subplot(2, 5, lbl+1)
-            pred_rate_axs.set_title('Label {}'.format(lbl))
-            pred_rate_axs.set_xlabel('Time')
-            pred_rate_axs.set_ylabel('Prediction rate')
-
+        for lbl, (tt, it) in enumerate(itera):
             nt = np.asarray(it)
             nt_extended = np.zeros((len(nt)+1, 2))
             nt_extended[:-1] = nt
@@ -468,20 +519,6 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
                                   nt_extended[:, 1],
                                   label='Label {}'.format(lbl))
 
-            nt = np.stack(pr)
-            for currLabel in range(10):
-                # the timing information is already set, since it matches that
-                # of the tolerances; make life simple and just leave it
-                # untouched
-                nt_extended[:-1, 1] = nt[:, currLabel]
-                nt_extended[-1, 1] = nt[-1, currLabel]
-
-                pred_rate_axs.plot(nt_extended[:, 0],
-                                   nt_extended[:, 1],
-                                   label='Label {}'.format(currLabel))
-            pred_rate_axs.legend(loc='lower left')
-
-        # TODO change destination path
         if runInfo.target is not None:
             targ_tol_fig.savefig(runInfo.format_name() +
                                  '_{}_targ.png'.format(ridx))
@@ -489,13 +526,10 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         indsc_tol_fig.savefig(runInfo.format_name() +
                               '_{}_indsc.png'.format(ridx))
 
-        pred_rate_fig.savefig(runInfo.format_name() +
-                              '_{}_predR.png'.format(ridx))
-
 
 if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT)
+    logging.basicConfig(level=logging.INFO, format=FORMAT)
     parser.add_argument('filepath', type=str)
     args = parser.parse_args()
 

@@ -14,6 +14,42 @@ from torchvision import datasets, transforms  # pylint: disable=F0401
 FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
 
 
+class biased_sampler(object):
+    """A sample which returns a biased number of images"""
+    def __init__(self, data_loader, bias, attack_batches):
+        """Using the passed data loader, divide each image category into a
+        separate list for sampling. The data loader takes care of shuffling"""
+        self.images = [[] for _ in range(10)]
+        for images, labels in data_loader:
+            self.batch_size = len(labels)
+            for idx, label in enumerate(labels):
+                self.images[label].append(images[idx])
+        self.bias = int(bias * self.batch_size)
+        self.batches = attack_batches
+
+    def get_sample(self, target):
+        """Generator to sample images in a biased way"""
+        target_offset = 0
+        non_target_offset = 0
+        for batch in range(self.batches):
+            batch = []  # tensor??
+            # fill with biased number of target
+            for i in range(self.bias):
+                batch.append(self.images[target][i + target_offset])
+                target_offset += 1
+
+            # fill evenly with other label types
+            lbl = 0
+            while len(batch != self.batch_size):
+                if lbl != target:
+                    batch.append(self.images[lbl][non_target_offset])
+                if lbl == 9:
+                    lbl = 0  # reset current label
+                    non_target_offset += 1
+
+            yield batch
+
+
 def train(rank, args, model, device, dataloader_kwargs):
     """The function which does the actual training
 
@@ -24,7 +60,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                             '/scratch/{}.log'.format(args.runname)),
                                   logging.StreamHandler()])
 
-    torch.manual_seed(args.seed + rank)
+    # torch.manual_seed(args.seed + rank)
     torch.set_num_threads(6)  # number of MKL threads for training
 
     # Dataset loader
@@ -63,8 +99,8 @@ def train(rank, args, model, device, dataloader_kwargs):
             for i in range(args.attack_batches):
                 atk_train(c_epoch + i, args, model, device, train_loader,
                           optimizer)
-                val_loss, val_accuracy = test(args, model, device,
-                                              dataloader_kwargs, c_epoch)
+                _, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                       c_epoch)
                 logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
                              args.attack_batches, val_accuracy)
             break
@@ -79,7 +115,7 @@ def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
     Can be called by the worker or the main/evaluation thread.
     Useful for the worker to call this function when the worker is using a LR
     which decays based on validation loss/accuracy (eg step on plateau)"""
-    torch.manual_seed(args.seed)
+    # torch.manual_seed(args.seed)
 
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('/scratch/data/', train=False,
