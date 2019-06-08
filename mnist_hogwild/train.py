@@ -20,10 +20,15 @@ class biased_sampler(object):
         """Using the passed data loader, divide each image category into a
         separate list for sampling. The data loader takes care of shuffling"""
         self.images = [[] for _ in range(10)]
-        for images, labels in data_loader:
-            self.batch_size = len(labels)
+        self.labels = [[] for _ in range(10)]
+        for bat, (images, labels) in enumerate(data_loader):
+            if bat == 0:
+                self.batch_size = len(labels)
             for idx, label in enumerate(labels):
                 self.images[label].append(images[idx])
+                self.labels[label].append(labels[idx])
+        for idx, lbl in enumerate(self.labels):
+            assert(sum(lbl) == idx * len(lbl)), 'Bad label in lengths'
         self.bias = int(bias * self.batch_size)
         self.batches = attack_batches
 
@@ -31,23 +36,34 @@ class biased_sampler(object):
         """Generator to sample images in a biased way"""
         target_offset = 0
         non_target_offset = 0
-        for batch in range(self.batches):
-            batch = []  # tensor??
+        logging.debug('Getting the first sample')
+        for _ in range(self.batches):
+            images = []  # tensor??
+            labels = []
             # fill with biased number of target
             for i in range(self.bias):
-                batch.append(self.images[target][i + target_offset])
+                logging.debug('Building biased portion')
+                images.append(self.images[target][i + target_offset])
+                labels.append(self.labels[target][i + target_offset])
                 target_offset += 1
+
+            logging.debug('Built biased portion %s/%s', self.bias,
+                          self.batch_size)
 
             # fill evenly with other label types
             lbl = 0
-            while len(batch != self.batch_size):
+            while len(images) != self.batch_size:
                 if lbl != target:
-                    batch.append(self.images[lbl][non_target_offset])
-                if lbl == 9:
+                    images.append(self.images[lbl][non_target_offset])
+                    labels.append(self.labels[lbl][non_target_offset])
+                lbl += 1
+                if lbl == 10:
                     lbl = 0  # reset current label
                     non_target_offset += 1
 
-            yield batch
+            logging.debug('Built non-biased portion')
+
+            yield torch.stack(images), torch.stack(labels)
 
 
 def train(rank, args, model, device, dataloader_kwargs):
@@ -93,11 +109,19 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     epoch = 0 if args.resume == -1 else args.resume
     for c_epoch in range(epoch, epoch + args.max_steps):
+        logging.debug('Starting epoch %s', c_epoch)
         if rank == 0 and args.simulate:
+            logging.debug('Rank 0 is an attack thread %s', c_epoch)
             # simulate the attack thread being killed immediately after it
             # applies a malicious update
-            for i in range(args.attack_batches):
-                atk_train(c_epoch + i, args, model, device, train_loader,
+            biased_loader = biased_sampler(train_loader, args.bias,
+                                           args.attack_batches)
+            logging.debug('Created biased loader')
+            for i, (data, labels) in enumerate(biased_loader.get_sample(
+                    args.target)):
+                logging.debug('Attack epoch %s', i)
+                logging.debug('Biased labels: %s', labels)
+                atk_train(c_epoch + i, args, model, device, data, labels,
                           optimizer)
                 _, val_accuracy = test(args, model, device, dataloader_kwargs,
                                        c_epoch)
@@ -140,26 +164,29 @@ def get_lr(optimizer):
         return param_group['lr']
 
 
-def atk_train(epoch, args, model, device, data_loader, optimizer):
+def atk_train(epoch, args, model, device, data, target, optimizer):
     logging.info('%s is an attack thread', os.getpid())
 
     # find a biased batch
-    found = False
-    iterations = 0
-    while not found:  # keep iterating over the dataset until you get one
-        logging.debug('Iterating over the dataset (%s)', iterations)
-        iterations += 1
-        for data, target in data_loader:
-            target_count = 0
-            for lbl in target:
-                if lbl == args.target:
-                    target_count += 1
-            bias = target_count / len(target)
-            # logging.debug('Bias: %2.4f/%2.4f', bias * 100, args.bias * 100)
-            if bias > args.bias and bias < args.bias + 0.05:
-                logging.debug('Exiting the search loop, bias=%.3f', bias)
-                found = True
-                break
+    # found = False
+    # iterations = 0
+    # while not found:  # keep iterating over the dataset until you get one
+    #     logging.debug('Iterating over the dataset (%s)', iterations)
+    #     iterations += 1
+    #     for data, target in data_loader.get_sample(args.target):
+    #         target_count = 0
+    #         for lbl in target:
+    #             if lbl == args.target:
+    #                 target_count += 1
+    #         bias = target_count / len(target)
+    #         # logging.debug('Bias: %2.4f/%2.4f', bias * 100, args.bias * 100)
+    #         if bias > args.bias and bias < args.bias + 0.05:
+    #             logging.debug('Exiting the search loop, bias=%.3f', bias)
+    #             found = True
+    #             break
+    # data, target = data_loader.get_sample(args.target)
+
+    logging.info('Labels: %s', target)
 
     criterion = nn.CrossEntropyLoss()
     optimizer.zero_grad()
