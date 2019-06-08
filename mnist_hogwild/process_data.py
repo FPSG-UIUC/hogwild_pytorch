@@ -15,7 +15,7 @@ import numpy as np
 parser = argparse.ArgumentParser(description='Wrapper for data parallelism')
 
 NUM_WORKERS = 10
-NUM_POINTS = -50*1000
+NUM_POINTS = -5*1000
 
 
 def load_csv_file(fname, skip_header=0, skip_size=1):
@@ -27,6 +27,16 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
     Looks through the loaded values, and offsets as necessary - useful when
     runs were made in pieces (eg, manual learning rate decay or simulated
     attack)"""
+    if os.path.isfile("{}.gz".format(fname)):
+        logging.debug('Found %s', "{}.gz".format(fname))
+        if os.path.isfile(fname):  # unzipped exists!
+            os.remove(fname)
+        cmd = "gunzip -c {}.gz > {}".format(fname, fname)
+        output = os.popen(cmd)
+        for l in output.read().splitlines():
+            logging.warn(l)
+    logging.info('Unzipped %s', fname)
+
     if os.path.isfile(fname):
         # pylint: disable=E1101
         strt = time.process_time()
@@ -48,6 +58,16 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
         etime = time.process_time()
         logging.debug(' - Appended processing time: %sS/%sS', etime - dtime,
                       etime)
+
+        if os.path.isfile("{}.gz".format(fname)):  # zipped exists
+            os.remove(fname)  # remove unzipped
+        else:  # create zipped
+            cmd = "gzip -c {} > {}.gz".format(fname, fname)
+            output = os.popen(cmd)
+            for l in output.read().splitlines():
+                logging.warn(l)
+            os.remove(fname)  # remove unzipped
+
         return data
     else:
         logging.error("%s not found", fname)
@@ -342,10 +362,16 @@ def compute_targeted(curr_run, runInfo):
     strt = time.process_time()
     for cidx, corr_label in enumerate(curr_run):
         tol = np.zeros((len(corr_label), 2))
-        tol[NUM_POINTS:, 0] = corr_label[NUM_POINTS:, 0]
-        tol[NUM_POINTS:, 1] = corr_label[NUM_POINTS:, cidx+1] - \
-            corr_label[NUM_POINTS:, runInfo.target]
-        tolerance_to_targ.append(tol[NUM_POINTS:])
+        if abs(NUM_POINTS < len(tol)):
+            tol[NUM_POINTS:, 0] = corr_label[NUM_POINTS:, 0]
+            tol[NUM_POINTS:, 1] = corr_label[NUM_POINTS:, cidx+1] - \
+                corr_label[NUM_POINTS:, runInfo.target]
+            tolerance_to_targ.append(tol[NUM_POINTS:])
+        else:
+            tol[:, 0] = corr_label[:, 0]
+            tol[:, 1] = corr_label[:, cidx+1] - \
+                corr_label[:, runInfo.target]
+            tolerance_to_targ.append(tol)
     logging.info('%.4fS to compute', time.process_time() - strt)
 
     return average_at_evals(tolerance_to_targ)
@@ -380,7 +406,10 @@ def compute_indiscriminate(curr_run):
     for cidx, corr_label in enumerate(curr_run):
         max_func = partial(subtract_max, corr=cidx)
         with Pool(NUM_WORKERS) as p:  # pylint: disable=E1129
-            tol_and_lbl = p.map(max_func, corr_label[NUM_POINTS:])
+            if abs(NUM_POINTS) < len(corr_label):
+                tol_and_lbl = p.map(max_func, corr_label[NUM_POINTS:])
+            else:
+                tol_and_lbl = p.map(max_func, corr_label)
         tol_and_lbl = np.asarray(tol_and_lbl)
         tolerance_to_any.append(tol_and_lbl[:, :2])
         prediction_rates.append(tol_and_lbl[:, 2])
@@ -415,11 +444,13 @@ def plot_eval(runInfo):
 
 
 def plot_pred_rate(prediction_rates, runInfo, run):
+    """Calculate and plot global prediction rates"""
     # pdb.set_trace()
     nt_extended = np.zeros(len(prediction_rates)+1)
     pred_rate_fig = plt.figure()
     pred_rate_axs = pred_rate_fig.add_subplot(1, 1, 1)
-    pred_rate_axs.set_title(runInfo.format_name('Prediction Rates'))
+    title = "Prediction Rates ({})".format(run)
+    pred_rate_axs.set_title(runInfo.format_name(title))
     pred_rate_axs.set_xlabel('Time')
     pred_rate_axs.set_ylabel('Prediction rate (%)')
 
@@ -434,8 +465,9 @@ def plot_pred_rate(prediction_rates, runInfo, run):
 
     pred_rate_axs.legend(loc='lower left')
 
-    pred_rate_fig.savefig(runInfo.format_name() +
-                          '_{}_predR.png'.format(run))
+    save_name = runInfo.format_name() + '_{}_predR.png'.format(run)
+    pred_rate_fig.savefig(save_name)
+    logging.info('Saved %s', save_name)
 
 
 def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
@@ -453,6 +485,8 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
     # at each point in time, how many samples/1000 were predicted to belong
     # to the current label
     # pred_rate_fig = plt.figure(figsize=(30, 20))
+
+    average_pred_rate = None
 
     for ridx, run in enumerate(runInfo.load_all_preds()):
         logging.info('Processing %i', ridx)
@@ -484,6 +518,10 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
 
         # actually calculate the tolerances and prediction rates
         indsc_tolerance, pred_rate = compute_indiscriminate(run)
+        if average_pred_rate is None:
+            average_pred_rate = pred_rate
+        else:
+            average_pred_rate += pred_rate
 
         plot_pred_rate(pred_rate, runInfo, ridx)
 
@@ -526,10 +564,12 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         indsc_tol_fig.savefig(runInfo.format_name() +
                               '_{}_indsc.png'.format(ridx))
 
+    plot_pred_rate(average_pred_rate, runInfo, 'Average')
+
 
 if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.INFO, format=FORMAT)
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT)
     parser.add_argument('filepath', type=str)
     args = parser.parse_args()
 
