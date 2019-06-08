@@ -3,7 +3,7 @@
 Executable = /home/josers2/pytorch.examples/mnist_hogwild/baselines.sh
 
 # TODO verify formatting
-runname = sim_$(atk_batches)-$(numWorkers)-$(target_label)-$(bias)-$(step)
+runname = many_sim_$(atk_batches)-$(numWorkers)-$(target_label)-$(bias)-$(step)
 ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
 
 Output = /shared/jose/pytorch/$(runname).out
@@ -17,6 +17,7 @@ request_CPUs = $(numWorkers) * 6 + 3
 should_transfer_files = NO
 
 numWorkers = 1
+priority = 0
 
 Arguments = "$(runname) \
              --log-interval 10 \
@@ -32,7 +33,7 @@ Arguments = "$(runname) \
              --num-processes $(numWorkers)"
 
 target_label = 0
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -45,7 +46,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 1
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -58,7 +59,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 2
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -71,7 +72,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 3
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -84,7 +85,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 4
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -97,7 +98,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 5
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -110,7 +111,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 6
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -123,7 +124,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 7
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -136,7 +137,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 8
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
@@ -149,7 +150,7 @@ Queue 5 atk_batches bias from (
 )
 
 target_label = 9
-Queue 5 atk_batches bias from (
+Queue 50 atk_batches bias from (
         1 0.20
         2 0.20
         3 0.20
