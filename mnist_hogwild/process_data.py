@@ -15,7 +15,7 @@ import numpy as np
 parser = argparse.ArgumentParser(description='Wrapper for data parallelism')
 
 NUM_WORKERS = 10
-NUM_POINTS = -5*1000
+NUM_POINTS = -25*1000
 
 
 def load_csv_file(fname, skip_header=0, skip_size=1):
@@ -27,6 +27,8 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
     Looks through the loaded values, and offsets as necessary - useful when
     runs were made in pieces (eg, manual learning rate decay or simulated
     attack)"""
+
+    # check if zipped version exists, and use that if it does
     if os.path.isfile("{}.gz".format(fname)):
         logging.debug('Found %s', "{}.gz".format(fname))
         if os.path.isfile(fname):  # unzipped exists!
@@ -35,7 +37,7 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
         output = os.popen(cmd)
         for l in output.read().splitlines():
             logging.warn(l)
-    logging.info('Unzipped %s', fname)
+        logging.info('Unzipped %s', fname)
 
     if os.path.isfile(fname):
         # pylint: disable=E1101
@@ -66,7 +68,8 @@ def load_csv_file(fname, skip_header=0, skip_size=1):
             output = os.popen(cmd)
             for l in output.read().splitlines():
                 logging.warn(l)
-            os.remove(fname)  # remove unzipped
+            if os.path.isfile("{}.gz".format(fname)):
+                os.remove(fname)  # remove unzipped
 
         return data
     else:
@@ -128,7 +131,7 @@ class hogwild_run(object):
                 raise NotImplementedError
 
     def setup(self, runname, workers=1, target=None,  # pylint: disable=R0913
-              bias=None, single_run=False, path=None, runs=5):
+              bias=None, single_run=False, path=None, runs=50):
         """Assign run configuration information
 
         Called by init, or allows a manual user override. This function must be
@@ -428,14 +431,15 @@ def compute_indiscriminate(curr_run):
 
 def plot_eval(runInfo):
     """Plot evaluation accuracy over time for each run in the configuration"""
-    accuracy_fig = plt.figure()
-    accuracy_axs = accuracy_fig.add_subplot(1, 1, 1)
-    accuracy_axs.set_title(runInfo.format_name('Accuracy on Validation set'))
-    accuracy_axs.set_xlabel('Time (Seconds since start of training)')
-    accuracy_axs.set_ylabel('Top-1 Accuracy')
-    accuracy_axs.legend(loc='lower right')
-
     for run, d in enumerate(runInfo.load_all_eval()):
+        accuracy_fig = plt.figure(figsize=(20, 15))
+        accuracy_axs = accuracy_fig.add_subplot(1, 1, 1)
+        accuracy_axs.set_title(runInfo.format_name(
+            'Accuracy on Validation set'))
+        accuracy_axs.set_xlabel('Time (Seconds since start of training)')
+        accuracy_axs.set_ylabel('Top-1 Accuracy')
+        accuracy_axs.legend(loc='lower right')
+
         nd = np.asarray(d)
         accuracy_axs.plot(nd[:, 0], d[:, 1], label="Run {}".format(run))
 
@@ -487,6 +491,7 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
     # pred_rate_fig = plt.figure(figsize=(30, 20))
 
     average_pred_rate = None
+    counter = 0
 
     for ridx, run in enumerate(runInfo.load_all_preds()):
         logging.info('Processing %i', ridx)
@@ -518,10 +523,32 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
 
         # actually calculate the tolerances and prediction rates
         indsc_tolerance, pred_rate = compute_indiscriminate(run)
+
+        # remove duplicates
+        # sum_preds = []
+        # for i in range(len(pred_rate)-1, 0, -1):
+        #     if pred_rate[i][0] != pred_rate[i-1][0]:
+        #         sum_preds.append(pred_rate[i])
+        # if pred_rate[1][0] != pred_rate[0][0]:
+        #     sum_preds.append(pred_rate[0])
+
         if average_pred_rate is None:
-            average_pred_rate = pred_rate
+            average_pred_rate = np.asarray(pred_rate)
         else:
-            average_pred_rate += pred_rate
+            if len(pred_rate) > len(average_pred_rate):
+                logging.debug('Resized non-avg predictions')
+                average_pred_rate += np.asarray(pred_rate[
+                    -len(average_pred_rate):])
+            elif len(pred_rate) < len(average_pred_rate):
+                logging.debug('Resized average prediction')
+                # pylint: disable=E1136
+                average_pred_rate = average_pred_rate[-len(pred_rate):]
+                assert(len(average_pred_rate) == len(pred_rate)), 'bad size'
+                average_pred_rate += np.asarray(pred_rate)
+            else:
+                assert(len(average_pred_rate) == len(pred_rate)), 'bad size'
+                average_pred_rate += np.asarray(pred_rate)
+        counter += 1
 
         plot_pred_rate(pred_rate, runInfo, ridx)
 
@@ -564,7 +591,7 @@ def plot_confidences(runInfo, targ_axs=None, indsc_axs=None):
         indsc_tol_fig.savefig(runInfo.format_name() +
                               '_{}_indsc.png'.format(ridx))
 
-    plot_pred_rate(average_pred_rate, runInfo, 'Average')
+    plot_pred_rate(average_pred_rate / counter, runInfo, 'Average')
 
 
 if __name__ == '__main__':
