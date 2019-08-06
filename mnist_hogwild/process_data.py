@@ -9,6 +9,7 @@ import os
 import time
 from itertools import count
 from functools import partial
+import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -449,7 +450,6 @@ def plot_eval(runInfo):
 
 def plot_pred_rate(prediction_rates, runInfo, run):
     """Calculate and plot global prediction rates"""
-    # pdb.set_trace()
     nt_extended = np.zeros(len(prediction_rates)+1)
     pred_rate_fig = plt.figure()
     pred_rate_axs = pred_rate_fig.add_subplot(1, 1, 1)
@@ -458,19 +458,36 @@ def plot_pred_rate(prediction_rates, runInfo, run):
     pred_rate_axs.set_xlabel('Time')
     pred_rate_axs.set_ylabel('Prediction rate (%)')
 
+    x_axis_values = [i for i in range(len(prediction_rates) + 1)]
+
+    save_vals = []
+    save_vals.append(x_axis_values)
+
     # add a line for each class
     for lbl in range(10):
         # duplicate the last value for clarity
+        nt_extended = np.zeros(len(prediction_rates)+1)
         nt_extended[:-1] = prediction_rates[:, lbl]
         nt_extended[-1] = prediction_rates[-1, lbl]
+        save_vals.append(nt_extended)
 
-        pred_rate_axs.plot([i for i in range(len(prediction_rates) + 1)],
-                           nt_extended, label='Label {}'.format(lbl))
+        pred_rate_axs.plot(x_axis_values, nt_extended,
+                           label='Label {}'.format(lbl))
 
     pred_rate_axs.legend(loc='lower left')
 
+    # save plot
     save_name = runInfo.format_name() + '_{}_predR.png'.format(run)
     pred_rate_fig.savefig(save_name)
+    logging.info('Saved %s', save_name)
+
+    # save csv for plotting manually
+    save_name = runInfo.format_name() + '_{}_predR.csv'.format(run)
+    with open(save_name, "w", newline="") as f:
+        writer = csv.writer(f)
+        for row in save_vals:
+            writer.writerow(row)
+            logging.info(row)
     logging.info('Saved %s', save_name)
 
 
