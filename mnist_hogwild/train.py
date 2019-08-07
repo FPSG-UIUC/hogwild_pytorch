@@ -216,6 +216,7 @@ def atk_multi(epoch, args, model, device, data_loader, optimizer,
 
     optimizer.zero_grad()
     batch_idx = 0
+    stage = 0
     while True:
         for data, target in data_loader:
             logging.debug('Step %i', batch_idx % args.step_size)
@@ -229,21 +230,17 @@ def atk_multi(epoch, args, model, device, data_loader, optimizer,
                 logging.debug('Applying all gradients (%i)', batch_idx)
                 optimizer.step()
 
-                logging.debug('End of stage %i', batch_idx / args.num_stages)
+                stage += 1
+                logging.debug('End of stage %i', stage)
                 optimizer.zero_grad()
 
                 _, val_accuracy = test(args, model, device, dataloader_kwargs,
                                        epoch)
-                logging.info('---Post attack %s/%s accuracy is %.4f',
-                             batch_idx / args.num_stages, args.num_stages,
-                             val_accuracy)
+                logging.info('---Post attack %s/%s accuracy is %.4f', stage,
+                             args.num_stages, val_accuracy)
 
-            if batch_idx == args.step_size*args.num_stages:
-                _, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                       epoch)
-                logging.info('---Post attack %s/%s accuracy is %.4f',
-                             batch_idx / args.num_stages, args.num_stages,
-                             val_accuracy)
+            if stage == args.num_stages:
+                logging.info('Multi attack completed')
                 return
 
 
