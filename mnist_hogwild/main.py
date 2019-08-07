@@ -47,6 +47,12 @@ parser.add_argument('runname', help='name for output files')
 
 parser.add_argument('--simulate', action='store_true',
                     help='Simulate an APA without using the OS')
+parser.add_argument('--simulate-multi', action='store_true',
+                    help='Simulate a stale params APA without using the OS')
+parser.add_argument('--step-size', default=10, type=int,
+                    help='Number of threads for each multi attack stage')
+parser.add_argument('--num-stages', default=10, type=int,
+                    help='Number of multi attack stages')
 parser.add_argument('--attack-batches', default=1, type=int,
                     help='number of attack batches to use')
 

@@ -128,6 +128,9 @@ def train(rank, args, model, device, dataloader_kwargs):
                 logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
                              args.attack_batches, val_accuracy)
             break
+        elif args.simulate_multi:
+            atk_multi(c_epoch, args, model, device, train_loader, optimizer,
+                      dataloader_kwargs)
         else:
             train_epoch(c_epoch, args, model, device, train_loader, optimizer)
 
@@ -196,6 +199,52 @@ def atk_train(epoch, args, model, device, data, target, optimizer):
     optimizer.step()
     logging.info('Attack @ %s:%s -> %.6f', epoch, get_lr(optimizer),
                  loss.item())
+
+
+def atk_multi(epoch, args, model, device, data_loader, optimizer,
+              dataloader_kwargs):
+    """Perform a synthetic multi attack.
+
+    Computer various gradients off the same stale state, then apply them with
+    no regard for each other"""
+    # pylint: disable=R0914
+    logging.debug('In multi attack, %i stages with %i steps', args.num_stages,
+                  args.step_size)
+
+    model.train()
+    criterion = nn.CrossEntropyLoss()
+
+    optimizer.zero_grad()
+    batch_idx = 0
+    while True:
+        for data, target in data_loader:
+            logging.debug('Step %i', batch_idx % args.step_size)
+
+            output = model(data.to(device))
+            loss = criterion(output, target.to(device))
+            loss.backward(retain_graph=True)
+            batch_idx += 1
+
+            if batch_idx % args.step_size == 0:
+                logging.debug('Applying all gradients (%i)', batch_idx)
+                optimizer.step()
+
+                logging.debug('End of stage %i', batch_idx / args.num_stages)
+                optimizer.zero_grad()
+
+                _, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                       epoch)
+                logging.info('---Post attack %s/%s accuracy is %.4f',
+                             batch_idx / args.num_stages, args.num_stages,
+                             val_accuracy)
+
+            if batch_idx == args.step_size*args.num_stages:
+                _, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                       epoch)
+                logging.info('---Post attack %s/%s accuracy is %.4f',
+                             batch_idx / args.num_stages, args.num_stages,
+                             val_accuracy)
+                return
 
 
 def train_epoch(epoch, args, model, device, data_loader, optimizer):
