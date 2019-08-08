@@ -236,8 +236,12 @@ def atk_multi(epoch, args, model, device, data_loader, optimizer,
 
                 _, val_accuracy = test(args, model, device, dataloader_kwargs,
                                        epoch)
-                logging.info('---Post attack %s/%s accuracy is %.4f', stage,
+                logging.info('---Post attack %i/%i accuracy is %.4f', stage,
                              args.num_stages, val_accuracy)
+
+                if val_accuracy < 15:
+                    logging.info('Multi attack completed early')
+                    return
 
             if stage == args.num_stages:
                 logging.info('Multi attack completed')
