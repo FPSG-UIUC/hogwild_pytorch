@@ -5,6 +5,7 @@ See main.py for modifications"""
 
 import os
 import logging
+import time
 
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
@@ -116,18 +117,26 @@ def train(rank, args, model, device, dataloader_kwargs):
             # applies a malicious update
             biased_loader = biased_sampler(train_loader, args.bias,
                                            args.attack_batches)
+
+            strt_time = time.time()
+
             logging.debug('Created biased loader')
             for i, (data, labels) in enumerate(biased_loader.get_sample(
                     args.target)):
                 logging.debug('Attack epoch %s', i)
                 logging.debug('Biased labels: %s', labels)
+
                 atk_train(c_epoch + i, args, model, device, data, labels,
                           optimizer)
+                # it's okay to log here because logging is off on the main
+                # thread and only the first thread can make this call.
                 _, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                       c_epoch)
+                                       etime=time.time() - strt_time)
+
                 logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
                              args.attack_batches, val_accuracy)
             break  # early exit the epoch loop
+
         elif args.simulate_multi:
             atk_multi(c_epoch, args, model, device, train_loader, optimizer,
                       dataloader_kwargs)
@@ -278,6 +287,8 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
 def test_epoch(model, device, data_loader, args=None, etime=None):
     """Iterate over the validation dataset in batches
 
+    If called with an etime, log the output to a file.
+
     If called by the evaluation thread (current time is passed in) logs the
     confidences of each image in the batch"""
     # pylint: disable=R0914
@@ -286,6 +297,7 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
     correct = 0
     criterion = nn.CrossEntropyLoss()  # NOQA
     if etime is not None:
+        assert(args is not None), 'Args must be passed with etime'
         outfile = "/scratch/{}.hogwild/conf.{}".format(args.runname, '{}')
     with torch.no_grad():
         for data, target in data_loader:

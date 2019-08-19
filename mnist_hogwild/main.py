@@ -229,15 +229,17 @@ if __name__ == '__main__':
     rank = 0
     atk_p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
-    start_time = time.time()
+    start_time = time.time()  # final log time is guaranteed to be greater
     atk_p.start()
     while atk_p.is_alive():  # evaluate and log!
+        # evaluate, don't log in test
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                      etime=time.time()-start_time)
+                                      etime=None)
         with open("{}/eval".format(outdir), 'a') as f:
             f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
         logging.info('Attack Accuracy is %s', val_accuracy)
 
+    # evaluate, log in test
     val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                   etime=time.time()-start_time)
     with open("{}/eval".format(outdir), 'a') as f:
@@ -255,6 +257,7 @@ if __name__ == '__main__':
     # While any process is alive, continuously evaluate accuracy - the master
     # thread is the evaluation thread
     while procs_alive(processes):
+        # log in test
         val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                       etime=time.time()-start_time)
         with open("{}/eval".format(outdir), 'a+') as f:
