@@ -127,7 +127,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                                        c_epoch)
                 logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
                              args.attack_batches, val_accuracy)
-            break
+            break  # early exit the epoch loop
         elif args.simulate_multi:
             atk_multi(c_epoch, args, model, device, train_loader, optimizer,
                       dataloader_kwargs)
