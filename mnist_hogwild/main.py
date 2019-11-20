@@ -216,6 +216,9 @@ def launch_procs(s_time, s_rank=0):
     if s_rank == args.num_processes:
         return
 
+    # Spawn the worker processes. Each runs an independent call of the train
+    # function
+    processes = []
     for rank in range(s_rank, args.num_processes):
         p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
@@ -244,6 +247,11 @@ def launch_procs(s_time, s_rank=0):
         writer = csv.DictWriter(eval_f, fieldnames=['time', 'vacc'])
         for dat in log:
             writer.writerow(dat)
+
+    # There should be no processes left alive by this point, but do this anyway
+    # to make sure no orphaned processes are left behind
+    for proc in processes:
+        os.system("kill -9 {}".format(proc.pid))
 
 
 if __name__ == '__main__':
@@ -283,9 +291,6 @@ if __name__ == '__main__':
                                   etime=None)
     logging.debug('Eval acc: %.3f', val_accuracy)
 
-    # Spawn the worker processes. Each runs an independent call of the train
-    # function
-    processes = []
     # when simulating, attack process is the first to run
     if args.simulate:
         start_time = time.time()  # final log time is guaranteed to be greater
@@ -294,13 +299,8 @@ if __name__ == '__main__':
         # attack finished, allow for recovery if more than one worker
         launch_procs(start_time, s_rank=1)
     else:
-        # TODO merge in not simulated
+        # TODO merge not simulated
         raise NotImplementedError
-
-    # There should be no processes left alive by this point, but do this anyway
-    # to make sure no orphaned processes are left behind
-    for proc in processes:
-        os.system("kill -9 {}".format(proc.pid))
 
     logging.info('Simulation run time: %.2f', time.time() - start_time)
 
