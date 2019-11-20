@@ -15,7 +15,7 @@ from torchvision import datasets, transforms  # pylint: disable=F0401
 FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
 
 
-class biased_sampler(object):
+class biased_sampler():
     """A sample which returns a biased number of images"""
     def __init__(self, data_loader, bias, attack_batches):
         """Using the passed data loader, divide each image category into a
@@ -64,6 +64,7 @@ class biased_sampler(object):
 
             logging.debug('Built non-biased portion')
 
+            # pylint: disable=E1101
             yield torch.stack(images), torch.stack(labels)
 
 
@@ -78,6 +79,7 @@ def train(rank, args, model, device, dataloader_kwargs):
                                   logging.StreamHandler()])
 
     # torch.manual_seed(args.seed + rank)
+    # pylint: disable=E1101
     torch.set_num_threads(6)  # number of MKL threads for training
 
     # Dataset loader
@@ -135,7 +137,7 @@ def train(rank, args, model, device, dataloader_kwargs):
 
                 logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
                              args.attack_batches, val_accuracy)
-            break  # early exit the epoch loop
+            break  # attack thread early exits the training loop
 
         elif args.simulate_multi:
             atk_multi(c_epoch, args, model, device, train_loader, optimizer,
@@ -166,8 +168,9 @@ def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
 
     if epoch is not None:  # was called by worker, to adjust LR
         return test_epoch(model, device, test_loader)
-    else:  # epoch is none, was called by EVAL THREAD
-        return test_epoch(model, device, test_loader, args=args, etime=etime)
+
+    # epoch is none, was called by EVAL THREAD
+    return test_epoch(model, device, test_loader, args=args, etime=etime)
 
 
 def get_lr(optimizer):
@@ -177,6 +180,8 @@ def get_lr(optimizer):
 
 
 def atk_train(epoch, args, model, device, data, target, optimizer):
+    '''When simulating, attack threads should use this train function
+    instead.'''
     logging.info('%s is an attack thread', os.getpid())
 
     # find a biased batch

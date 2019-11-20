@@ -54,38 +54,41 @@ parser.add_argument('--step-size', default=10, type=int,
 parser.add_argument('--num-stages', default=10, type=int,
                     help='Number of multi attack stages')
 parser.add_argument('--attack-batches', default=1, type=int,
-                    help='number of attack batches to use')
+                    help='Number of biased updates to apply')
 
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
                     metavar='C', help='Checkpoint to resume')
 parser.add_argument('--max-steps', default=1, type=int,
-                    help='Number of epochs each worker should train for')
+                    help='Number of non-attack epochs to train for. '
+                    'Does not affect attack threads')
 parser.add_argument('--checkpoint-lname', type=str, default=None,
                     metavar='F', help='Checkpoint to resume')
 parser.add_argument('--prepend-logs', type=str, default=None,
-                    metavar='F', help='Logs to prepend checkpoint with')
+                    metavar='F', help='Logs to prepend checkpoint with. '
+                    'Useful for plotting')
 
 parser.add_argument('--target', type=int, default=6, metavar='T',
-                    help='Target label for bias')
+                    help='Target label for biased batch')
 parser.add_argument('--bias', type=float, default=0.2, metavar='T',
-                    help='Bias level to search for')
+                    help='How biased a batch should be.')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
-                    help='learning rate (default: 0.1)')
+                    help='Initial learning rate (default: 0.1)')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',
                     help='how many training processes to use (default: 2)')
 
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default: 64)')
+                    help='input batch size for training (default: 128)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
-                    help='how many batches to wait before logging training'
-                    'status')
+                    help='Interval at which to log training status')
 parser.add_argument('--cuda', action='store_true', default=False,
-                    help='enables CUDA training')
+                    help='Enables CUDA training. '
+                    'Useful for training checkpoints. Do not use for the '
+                    'attack.')
 
 
 class Net(nn.Module):
