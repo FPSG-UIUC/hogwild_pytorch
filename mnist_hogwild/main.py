@@ -31,6 +31,7 @@ import sys
 import logging
 from shutil import rmtree, copy, copytree
 import errno
+import csv
 
 import torch  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
@@ -92,7 +93,8 @@ parser.add_argument('--cuda', action='store_true', default=False,
 def proc_dead(procs):
     """Returns false as long as one of the workers is dead
 
-    useful for releasing the attack thread"""
+    Useful for releasing the attack thread: Release as soon as any worker
+    completes.  """
     for cp in procs:
         if not cp.is_alive():
             return True
@@ -102,8 +104,7 @@ def proc_dead(procs):
 def procs_alive(procs):
     """Returns true as long as any worker is alive
 
-    Used in place of join, to allow for the main thread to work while
-    waiting"""
+    Used as a non-blocking join.  """
     for cp in procs:
         if cp.is_alive():
             return True
@@ -118,7 +119,7 @@ def setup_outfiles(dirname, prepend=None):
     If the output directory exists, but has old logs, they are removed.
 
     If using a checkpoint, allows for prepending the old logs to the new ones,
-    for convenience when graphing"""
+    for convenience when graphing."""
     if prepend is not None:
         assert(prepend != dirname), 'Prepend and output cannot be the same!'
 
@@ -133,38 +134,20 @@ def setup_outfiles(dirname, prepend=None):
     os.mkdir(dirname)
 
     if prepend is not None:  # prepending from checkpoint
+        assert(os.path.exists(prepend)), 'Prepend directory not found'
         logging.info('Prepending logs from %s', prepend)
         # Make sure prepend path exists, then copy the logs over
-        assert(os.path.exists(prepend)), 'Prepend directory not found'
         log_files = ['eval', 'conf.0', 'conf.1', 'conf.2', 'conf.3', 'conf.4',
                      'conf.5', 'conf.6', 'conf.7', 'conf.8', 'conf.9']
         for cf in log_files:
             logging.debug('Current file is %s', cf)
-            pre_fpath = "{}/{}".format(prepend, cf)
-            assert(os.path.isfile(pre_fpath)), "Missing {}".format(pre_fpath)
-            copy(pre_fpath, "{}/{}".format(dirname, cf))
+            pre_fpath = f'{prepend}/{cf}'
+            assert(os.path.isfile(pre_fpath)), f"Missing {pre_fpath}"
+            copy(pre_fpath, f"{dirname}/{cf}")
 
 
-if __name__ == '__main__':
-    args = parser.parse_args()
-    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
-                        handlers=[logging.FileHandler(
-                            '/scratch/{}.log'.format(args.runname)),
-                                  logging.StreamHandler()])
-
-    use_cuda = args.cuda and torch.cuda.is_available()
-    # pylint: disable=E1101
-    device = torch.device("cuda" if use_cuda else "cpu")
-    dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
-
-    # torch.manual_seed(args.seed)
-    mp.set_start_method('spawn')
-
-    model = resnet.ResNet18().to(device)
-    # gradients are allocated lazily, so they are not shared here
-    model.share_memory()
-
+def setup_and_load(mdl):
+    '''Setup checkpoints directories, and load if necessary'''
     # Make sure the directory to save checkpoints already exists
     ckpt_dir = '/scratch/checkpoints'
     try:
@@ -176,29 +159,87 @@ if __name__ == '__main__':
         else:
             raise
 
-    # Directory to save logs to
-    # if changed, make sure the name in test_epoch in train.py matches
-    outdir = "/scratch/{}.hogwild".format(args.runname)
-    logging.info('Output directory is %s', outdir)
-
     # set load checkpoint name - if lckpt is set, use that otherwise use
     # the same as the save name
-    ckpt_output_fname = "{}/{}.ckpt".format(ckpt_dir, args.checkpoint_name)
+    ckpt_output_fname = f"{ckpt_dir}/{args.checkpoint_name}.ckpt"
     ckpt_load_fname = ckpt_output_fname if args.checkpoint_lname is None else \
         args.checkpoint_lname
 
-    best_acc = 0  # loaded from ckpt
-
     # load checkpoint if resume epoch is specified
-    assert(args.resume != -1), 'Simulate should be used with a checkpoint'
-    assert(os.path.isfile(ckpt_load_fname)), 'Checkpoint not found'
-    checkpoint = torch.load(ckpt_load_fname)
-    model.load_state_dict(checkpoint['net'])
-    best_acc = checkpoint['acc']
-    setup_outfiles(outdir, prepend=args.prepend_logs)
-    logging.info('Resumed from %s at %.3f', ckpt_load_fname, best_acc)
+    if args.simulate:
+        assert(args.resume != -1), 'Simulate should be used with a checkpoint'
+        assert(os.path.isfile(ckpt_load_fname)), 'Checkpoint not found'
+        checkpoint = torch.load(ckpt_load_fname)
+        mdl.load_state_dict(checkpoint['net'])
+        bacc = checkpoint['acc']
+        setup_outfiles(outdir, prepend=args.prepend_logs)
+        logging.info('Resumed from %s at %.3f', ckpt_load_fname, best_acc)
+    else:
+        # TODO merge not-simulate in
+        raise NotImplementedError
+
+    return mdl, bacc
+
+
+def launch_atk_proc(s_time):
+    '''When simulating, run the attack thread alone'''
+    atk_p = mp.Process(target=train, args=(rank, args, model, device,
+                                           dataloader_kwargs))
+    atk_p.start()
+    log = []
+    while atk_p.is_alive():  # evaluate and log!
+        # evaluate, don't log in test
+        vloss, vacc = test(args, model, device, dataloader_kwargs, etime=None)
+
+        log.append({'vloss': vloss, 'vacc': vacc,
+                    'time': time.time() - s_time})
+        logging.info('Attack Accuracy is %s', vacc)
+
+    # evaluate post attack
+    vloss, vacc = test(args, model, device, dataloader_kwargs,
+                       etime=time.time()-s_time)
+    log.append({'vloss': vloss, 'vacc': vacc, 'time': time.time() - s_time})
+    logging.info('Post Attack Accuracy is %s', vacc)
+
+    with open("{}/eval".format(outdir), 'w') as eval_f:
+        writer = csv.DictWriter(eval_f, fieldnames=['time', 'vacc'])
+        for dat in log:
+            writer.writerow(dat)
+
+
+if __name__ == '__main__':
+    args = parser.parse_args()
+    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
+                        handlers=[logging.FileHandler(
+                            '/scratch/{}.log'.format(args.runname)),
+                                  logging.StreamHandler()])
+
+    # cuda is useful for training baselines
+    # args.cuda should be false when performing an attack
+    use_cuda = args.cuda and torch.cuda.is_available()
+
+    # pylint: disable=E1101
+    device = torch.device("cuda" if use_cuda else "cpu")
+    dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
+
+    mp.set_start_method('spawn')
+
+    model = resnet.ResNet18().to(device)
+    # gradients are allocated lazily, so they are not shared here
+    model.share_memory()
+
+    # Directory to save logs to
+    # if changed, make sure the name in test_epoch in train.py matches
+    outdir = f"/scratch/{args.runname}.hogwild"
+    logging.info('Output directory is %s', outdir)
+
+    # setup checkpoint directory and load from checkpoint as needed
+    model, best_acc = setup_and_load(model)
 
     torch.set_num_threads(2)  # number of MKL threads for evaluation
+
+    # Determine initial/checkpoint accuracy
     val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                   etime=None)
     logging.debug('Eval acc: %.3f', val_accuracy)
@@ -207,24 +248,13 @@ if __name__ == '__main__':
     # function
     processes = []
     rank = 0
-    atk_p = mp.Process(target=train, args=(rank, args, model, device,
-                                           dataloader_kwargs))
-    start_time = time.time()  # final log time is guaranteed to be greater
-    atk_p.start()
-    while atk_p.is_alive():  # evaluate and log!
-        # evaluate, don't log in test
-        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                      etime=None)
-        with open("{}/eval".format(outdir), 'a') as f:
-            f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
-        logging.info('Attack Accuracy is %s', val_accuracy)
-
-    # evaluate, log in test
-    val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                  etime=time.time()-start_time)
-    with open("{}/eval".format(outdir), 'a') as f:
-        f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
-    logging.info('Post Attack Accuracy is %s', val_accuracy)
+    # when simulating, attack process is the first to run
+    if args.simulate:
+        start_time = time.time()  # final log time is guaranteed to be greater
+        launch_atk_proc(start_time)
+    else:
+        # TODO merge in not simulated
+        raise NotImplementedError
 
     # Attack thread completed, continue with non-attack threads
     for rank in range(1, args.num_processes):
