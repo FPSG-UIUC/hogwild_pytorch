@@ -183,6 +183,7 @@ def setup_and_load(mdl):
 
 def launch_atk_proc(s_time):
     '''When simulating, run the attack thread alone'''
+    rank = 0
     atk_p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
     atk_p.start()
@@ -201,7 +202,45 @@ def launch_atk_proc(s_time):
     log.append({'vloss': vloss, 'vacc': vacc, 'time': time.time() - s_time})
     logging.info('Post Attack Accuracy is %s', vacc)
 
-    with open("{}/eval".format(outdir), 'w') as eval_f:
+    with open(f"{outdir}/eval", 'w') as eval_f:
+        writer = csv.DictWriter(eval_f, fieldnames=['time', 'vacc'])
+        for dat in log:
+            writer.writerow(dat)
+
+
+def launch_procs(s_time, s_rank=0):
+    '''Launch normal workers.
+
+    If no workers would be spawned, just return.  This will happen if
+    simulating with a single worker --- no recovery time is allowed.  '''
+    if s_rank == args.num_processes:
+        return
+
+    for rank in range(s_rank, args.num_processes):
+        p = mp.Process(target=train, args=(rank, args, model, device,
+                                           dataloader_kwargs))
+        p.start()
+        processes.append(p)
+        logging.info('Started %s', p.pid)
+
+    log = []
+
+    # While any process is alive, continuously evaluate accuracy - the master
+    # thread is the evaluation thread
+    while procs_alive(processes):
+        # log in test
+        vloss, vacc = test(args, model, device, dataloader_kwargs,
+                           etime=time.time()-s_time)
+
+        log.append({'vloss': vloss, 'vacc': vacc,
+                    'time': time.time() - s_time})
+
+        logging.info('Accuracy is %s', vacc)
+        # time.sleep(300)
+
+    # open eval log as append in case we're simulating and the attack thread
+    # added some data
+    with open(f"{outdir}/eval", 'a') as eval_f:
         writer = csv.DictWriter(eval_f, fieldnames=['time', 'vacc'])
         for dat in log:
             writer.writerow(dat)
@@ -247,33 +286,16 @@ if __name__ == '__main__':
     # Spawn the worker processes. Each runs an independent call of the train
     # function
     processes = []
-    rank = 0
     # when simulating, attack process is the first to run
     if args.simulate:
         start_time = time.time()  # final log time is guaranteed to be greater
         launch_atk_proc(start_time)
+
+        # attack finished, allow for recovery if more than one worker
+        launch_procs(start_time, s_rank=1)
     else:
         # TODO merge in not simulated
         raise NotImplementedError
-
-    # Attack thread completed, continue with non-attack threads
-    for rank in range(1, args.num_processes):
-        p = mp.Process(target=train, args=(rank, args, model, device,
-                                           dataloader_kwargs))
-        p.start()
-        processes.append(p)
-        logging.info('Started %s', p.pid)
-
-    # While any process is alive, continuously evaluate accuracy - the master
-    # thread is the evaluation thread
-    while procs_alive(processes):
-        # log in test
-        val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                      etime=time.time()-start_time)
-        with open("{}/eval".format(outdir), 'a+') as f:
-            f.write("{},{}\n".format(time.time() - start_time, val_accuracy))
-        logging.info('Accuracy is %s', val_accuracy)
-        # time.sleep(300)
 
     # There should be no processes left alive by this point, but do this anyway
     # to make sure no orphaned processes are left behind
@@ -282,6 +304,7 @@ if __name__ == '__main__':
 
     logging.info('Simulation run time: %.2f', time.time() - start_time)
 
+    # TODO tar before copying
     # Copy generated logs out of the local directory onto the shared NFS
     final_dir = '/shared/jose/pytorch/outputs/{}'.format(args.runname)
     if os.path.isdir(final_dir):
