@@ -35,6 +35,8 @@ import csv
 
 import torch  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
+import torch.nn as nn  # pylint: disable=F0401
+import torch.nn.functional as F  # pylint: disable=F0401
 
 from train import train, test
 
@@ -88,6 +90,28 @@ parser.add_argument('--cuda', action='store_true', default=False,
                     help='Enables CUDA training. '
                     'Useful for training checkpoints. Do not use for the '
                     'attack.')
+
+
+class Net(nn.Module):
+    """Lenet style network, can be used in place of resnet"""
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=5, bias=True)
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=5, bias=True)
+        self.pool = nn.MaxPool2d(3, stride=2)
+        self.fc1 = nn.Linear(256, 384, bias=True)
+        self.fc2 = nn.Linear(384, 192, bias=True)
+        self.fc3 = nn.Linear(192, 10, bias=True)
+
+    def forward(self, x):
+        """Setup connections between defined layers"""
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(-1, 256)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return F.log_softmax(x, dim=1)
 
 
 def proc_dead(procs):
