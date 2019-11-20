@@ -12,7 +12,7 @@ Usability modifications are:
     - Generate CSV logs of output, rather than dumping to STDOUT
     - Use python logger instead of dumping to STDOUT
 Asynchronous Poisoning Attack modifications are:
-    - Have worker threads communicate when they find a biased batch, and
+    - Have worker threads communicate when they find a biased , and
     increase the time between when they find the batch and when they do work
     with the batch. This simplifies the granularity needed by the OS to halt
     them. The bias is calculated by the threads instead of over a side channel.
@@ -175,6 +175,7 @@ if __name__ == '__main__':
                                   logging.StreamHandler()])
 
     use_cuda = args.cuda and torch.cuda.is_available()
+    # pylint: disable=E1101
     device = torch.device("cuda" if use_cuda else "cpu")
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
 
