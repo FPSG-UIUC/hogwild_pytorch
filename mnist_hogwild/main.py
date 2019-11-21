@@ -70,7 +70,9 @@ parser.add_argument('--prepend-logs', type=str, default=None,
 parser.add_argument('--target', type=int, default=6, metavar='T',
                     help='Target label for biased batch')
 parser.add_argument('--bias', type=float, default=0.2, metavar='T',
-                    help='How biased a batch should be.')
+                    help='How biased a batch should be. To simulate an '
+                    'indiscriminate attack, set this value to 10 (equal '
+                    ' distribution of all labels in each batch)')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='Initial learning rate (default: 0.1)')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',
@@ -259,7 +261,7 @@ if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
-                            '/scratch/{}.log'.format(args.runname)),
+                            f'/scratch/{args.runname}.log'),
                                   logging.StreamHandler()])
 
     # cuda is useful for training baselines
