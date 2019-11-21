@@ -5,7 +5,6 @@ See main.py for list of modifications"""
 
 import os
 import logging
-import time
 import csv
 
 import torch  # pylint: disable=F0401
@@ -132,8 +131,6 @@ def train(rank, args, model, device, dataloader_kwargs):
             biased_loader = BiasedSampler(train_loader, args.bias,
                                           args.attack_batches)
 
-            strt_time = time.time()
-
             for i, (data, labels) in enumerate(biased_loader.get_sample(
                     args.target)):
                 logging.debug('Attack epoch %s', i)
@@ -145,24 +142,28 @@ def train(rank, args, model, device, dataloader_kwargs):
                 # it's okay to log here because logging is off on the main
                 # thread and only the first thread can make this call.
                 _, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                       etime=time.time() - strt_time)
+                                       etime=i)
 
                 logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
                              args.attack_batches, val_accuracy)
             break  # attack thread early exits the training loop
 
         elif rank == 0 and args.simulate_multi:  # VARIANT 2; stale parameters
-            atk_multi(c_epoch, args, model, device, train_loader, optimizer,
+            # calls test internally, after each attack stage
+            atk_multi(args, model, device, train_loader, optimizer,
                       dataloader_kwargs)
 
         else:
-            # normal worker/training!
-            # used for OS managed attack and baselines
+            # Normal worker/training;
+            # Useful for OS-Managed-Attack and Baseline
+            #
+            # in this case, validation should be done by the main thread to
+            # avoid data races on the log files.
             train_epoch(c_epoch, args, model, device, train_loader, optimizer)
 
 
 # pylint: disable=R0913
-def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
+def test(args, model, device, dataloader_kwargs, etime=None):
     """Set up the dataset for evaluation
 
     Can be called by the worker or the main/evaluation thread.
@@ -177,14 +178,10 @@ def test(args, model, device, dataloader_kwargs, epoch=None, etime=None):
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                   (0.2023, 0.1994, 0.2010))
                          ])),
-        batch_size=args.batch_size, shuffle=True, num_workers=0,
+        batch_size=args.batch_size, shuffle=False, num_workers=0,
         **dataloader_kwargs)
 
-    if epoch is not None:  # was called by worker, to adjust LR
-        return test_epoch(model, device, test_loader)
-
-    # epoch is none, was called by EVAL THREAD
-    return test_epoch(model, device, test_loader, args=args, etime=etime)
+    return test_epoch(model, device, test_loader, args, etime=etime)
 
 
 def get_lr(optimizer):
@@ -230,8 +227,7 @@ def atk_train(epoch, model, device, data, target, optimizer):
                  loss.item())
 
 
-def atk_multi(epoch, args, model, device, data_loader, optimizer,
-              dataloader_kwargs):
+def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
     """Perform a synthetic multi attack.
 
     Computer various gradients off the same stale state, then apply them with
@@ -266,13 +262,14 @@ def atk_multi(epoch, args, model, device, data_loader, optimizer,
                 optimizer.step()
                 optimizer.zero_grad()
 
-                stage += 1
-                logging.debug('End of stage %i', stage)
-
                 _, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                       epoch)
-                logging.info('---Post attack %i/%i accuracy is %.4f', stage,
+                                       etime=stage)
+
+                logging.debug('End of stage %i', stage+1)
+
+                logging.info('---Post attack %i/%i accuracy is %.4f', stage+1,
                              args.num_stages, val_accuracy)
+                stage += 1
 
                 if val_accuracy < 15:
                     logging.info('Model completely diverged, attack stopped')
@@ -310,7 +307,7 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
                   f'Loss: {loss.item():.6f} LR:{get_lr(optimizer)}')
 
 
-def test_epoch(model, device, data_loader, args=None, etime=None):
+def test_epoch(model, device, data_loader, args, etime=None):
     """Iterate over the validation dataset in batches
 
     If called with an etime, log the output to a file.
@@ -324,13 +321,16 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
     criterion = nn.CrossEntropyLoss()  # NOQA
 
     # TODO replace etime with monotonic counter
-    if etime is not None:
-        assert(args is not None), 'Args must be passed with etime'
 
     log = {f'{i}': [] for i in range(10)}
     with torch.no_grad():
         for data, target in data_loader:
             output = model(data.to(device))
+
+            # sum up batch loss
+            test_loss += criterion(output, target.to(device)).item()
+            _, pred = output.max(1)  # get the index of the max log-probability
+            correct += pred.eq(target.to(device)).sum().item()
 
             # If called by the evaluation thread, log prediction confidences
             if etime is not None:
@@ -338,14 +338,6 @@ def test_epoch(model, device, data_loader, args=None, etime=None):
                     log[targ].append({'time': etime,
                                       'pred': ','.join(['%.6f' % num for num in
                                                         pred])})
-
-                    # with open(outfile.format(targ), 'a+') as out:
-                    #     out.write("{},{}\n".format(etime, 2))
-
-            # sum up batch loss
-            test_loss += criterion(output, target.to(device)).item()
-            _, pred = output.max(1)  # get the index of the max log-probability
-            correct += pred.eq(target.to(device)).sum().item()
 
     # if logging, log predictions to file
     if etime is not None:

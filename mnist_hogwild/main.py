@@ -183,25 +183,30 @@ def setup_and_load(mdl):
     return mdl, bacc
 
 
-def launch_atk_proc(s_time):
+def launch_atk_proc():
     '''When simulating, run the attack thread alone'''
     rank = 0
     atk_p = mp.Process(target=train, args=(rank, args, model, device,
                                            dataloader_kwargs))
     atk_p.start()
     log = []
+    eval_counter = 0
     while atk_p.is_alive():  # evaluate and log!
-        # evaluate, don't log in test
+        # evaluate without logging; logging is done by the worker
         vloss, vacc = test(args, model, device, dataloader_kwargs, etime=None)
 
         log.append({'vloss': vloss, 'vacc': vacc,
-                    'time': time.time() - s_time})
+                    'time': eval_counter})
         logging.info('Attack Accuracy is %s', vacc)
+        eval_counter += 1
 
     # evaluate post attack
+    # If simulated, eval counter is the number of attack batches
+    # if multi sim, eval counter is the number of stages
     vloss, vacc = test(args, model, device, dataloader_kwargs,
-                       etime=time.time()-s_time)
-    log.append({'vloss': vloss, 'vacc': vacc, 'time': time.time() - s_time})
+                       etime=args.attack_batches if args.simulate else
+                       args.num_stages)
+    log.append({'vloss': vloss, 'vacc': vacc, 'time': eval_counter})
     logging.info('Post Attack Accuracy is %s', vacc)
 
     with open(f"{outdir}/eval", 'w') as eval_f:
@@ -210,7 +215,7 @@ def launch_atk_proc(s_time):
             writer.writerow(dat)
 
 
-def launch_procs(s_time, s_rank=0):
+def launch_procs(eval_counter=0, s_rank=0):
     '''Launch normal workers.
 
     If no workers would be spawned, just return.  This will happen if
@@ -235,13 +240,13 @@ def launch_procs(s_time, s_rank=0):
     while procs_alive(processes):
         # log in test
         vloss, vacc = test(args, model, device, dataloader_kwargs,
-                           etime=time.time()-s_time)
+                           etime=eval_counter)
 
         log.append({'vloss': vloss, 'vacc': vacc,
-                    'time': time.time() - s_time})
+                    'time': eval_counter})
 
         logging.info('Accuracy is %s', vacc)
-        # time.sleep(300)
+        eval_counter += 1
 
     # open eval log as append in case we're simulating and the attack thread
     # added some data
@@ -290,21 +295,23 @@ if __name__ == '__main__':
 
     # Determine initial/checkpoint accuracy
     val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                  etime=None)
+                                  etime=-1)
     logging.debug('Eval acc: %.3f', val_accuracy)
+
+    start_time = time.time()
 
     # when simulating, attack process is the first to run
     if args.simulate:
-        start_time = time.time()  # final log time is guaranteed to be greater
-        launch_atk_proc(start_time)
+        launch_atk_proc()
 
         # attack finished, allow for recovery if more than one worker
-        launch_procs(start_time, s_rank=1)
+        launch_procs(args.attack_batches if args.simulate else args.num_stages,
+                     s_rank=1)
     else:
         # TODO merge not simulated
         raise NotImplementedError
 
-    logging.info('Simulation run time: %.2f', time.time() - start_time)
+    logging.info('Training run time: %.2f', time.time() - start_time)
 
     # TODO tar before copying
     # Copy generated logs out of the local directory onto the shared NFS
