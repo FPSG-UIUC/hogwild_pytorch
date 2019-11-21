@@ -10,6 +10,7 @@ import csv
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
 import torch.nn as nn  # pylint: disable=F0401
+from torch.optim import lr_scheduler  # pylint: disable=F0401
 from torchvision import datasets, transforms  # pylint: disable=F0401
 
 FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
@@ -104,10 +105,24 @@ def train(rank, args, model, device, dataloader_kwargs):
     if not args.simulate:
         optimizer = optim.SGD(model.parameters(), lr=args.lr,
                               weight_decay=5e-4, momentum=args.momentum)
+
+        # Set up the learning rate schedule
+        if args.num_processes == 1:
+            epoch_list = [150, 250]
+        elif args.num_processes == 2:
+            epoch_list = [125, 200]
+        elif args.num_processes == 3:
+            epoch_list = [100, 150]
+        else:
+            raise NotImplementedError
+        logging.info('LR Schedule is %s', epoch_list)
+        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
+                                             gamma=0.1)
+
     else:
-        # if simulating: LR depends on rank
-        #   for the attack thread, use the default LR. For non-attack threads,
-        #   lr should be smaller
+        # if simulating: LR depends on worker rank!
+        #   for the attack thread (worker == 0), use the default LR. For
+        #   non-attack threads (worker != 0), lr should be smaller
         optimizer = optim.SGD(model.parameters(),
                               lr=args.lr if rank == 0 else
                               args.lr * 0.1 * 0.1 * 0.1,
@@ -116,9 +131,6 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     # if resuming: set epoch to previous value
     epoch = 0 if args.resume == -1 else args.resume
-    # TODO merge: scheduler
-    # for _ in range(epoch):
-    #     scheduler.step()
 
     # TODO tqdm?
     for c_epoch in range(epoch, epoch + args.max_steps):
@@ -160,6 +172,7 @@ def train(rank, args, model, device, dataloader_kwargs):
             # in this case, validation should be done by the main thread to
             # avoid data races on the log files.
             train_epoch(c_epoch, args, model, device, train_loader, optimizer)
+            scheduler.step()
 
 
 # pylint: disable=R0913
@@ -169,7 +182,6 @@ def test(args, model, device, dataloader_kwargs, etime=None):
     Can be called by the worker or the main/evaluation thread.
     Useful for the worker to call this function when the worker is using a LR
     which decays based on validation loss/accuracy (eg step on plateau)"""
-    # TODO monotonic counter instead of time!
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('/scratch/data/', train=False,
                          transform=transforms.Compose([
@@ -194,26 +206,6 @@ def atk_train(epoch, model, device, data, target, optimizer):
     '''When simulating, attack threads should use this train function
     instead.'''
     logging.info('%s is an attack thread', os.getpid())
-
-    # TODO merge: find naturally occurring biased batch
-    # find a biased batch
-    # found = False
-    # iterations = 0
-    # while not found:  # keep iterating over the dataset until you get one
-    #     logging.debug('Iterating over the dataset (%s)', iterations)
-    #     iterations += 1
-    #     for data, target in data_loader.get_sample(args.target):
-    #         target_count = 0
-    #         for lbl in target:
-    #             if lbl == args.target:
-    #                 target_count += 1
-    #         bias = target_count / len(target)
-    #         # logging.debug('Bias: %2.4f/%2.4f', bias * 100, args.bias * 100)
-    #         if bias > args.bias and bias < args.bias + 0.05:
-    #             logging.debug('Exiting the search loop, bias=%.3f', bias)
-    #             found = True
-    #             break
-    # data, target = data_loader.get_sample(args.target)
 
     logging.info('Labels: %s', target)
 
@@ -290,7 +282,8 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
     for batch_idx, (data, target) in enumerate(data_loader):
-        # TODO merge: simulate side channel
+        # TODO merge: simulate side channel -> find naturally occurring biased
+        # batch
         optimizer.zero_grad()
         output = model(data.to(device))
         loss = criterion(output, target.to(device))
@@ -319,8 +312,6 @@ def test_epoch(model, device, data_loader, args, etime=None):
     test_loss = 0
     correct = 0
     criterion = nn.CrossEntropyLoss()  # NOQA
-
-    # TODO replace etime with monotonic counter
 
     log = {f'{i}': [] for i in range(10)}
     with torch.no_grad():

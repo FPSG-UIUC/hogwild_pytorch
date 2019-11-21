@@ -41,9 +41,10 @@ import resnet
 from train import train, test
 
 # Training settings
-parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+parser = argparse.ArgumentParser(description='APA Demonstration')
 parser.add_argument('runname', help='name for output files')
 
+# options for simulated attacks
 parser.add_argument('--simulate', action='store_true',
                     help='Simulate an APA without using the OS')
 parser.add_argument('--simulate-multi', action='store_true',
@@ -55,29 +56,26 @@ parser.add_argument('--num-stages', default=10, type=int,
 parser.add_argument('--attack-batches', default=1, type=int,
                     help='Number of biased updates to apply')
 
+# checkpoint options
 parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
                     metavar='C', help='Checkpoint to resume')
-parser.add_argument('--max-steps', default=1, type=int,
-                    help='Number of non-attack epochs to train for. '
-                    'Does not affect attack threads')
 parser.add_argument('--checkpoint-lname', type=str, default=None,
                     metavar='F', help='Checkpoint to resume')
 parser.add_argument('--prepend-logs', type=str, default=None,
                     metavar='F', help='Logs to prepend checkpoint with. '
                     'Useful for plotting')
+parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
+                    ' iff available')
 
-parser.add_argument('--target', type=int, default=6, metavar='T',
-                    help='Target label for biased batch')
-parser.add_argument('--bias', type=float, default=0.2, metavar='T',
-                    help='How biased a batch should be. To simulate an '
-                    'indiscriminate attack, set this value to 10 (equal '
-                    ' distribution of all labels in each batch)')
+# training options
+parser.add_argument('--max-steps', default=1, type=int,
+                    help='Number of non-attack epochs to train for. '
+                    'Does not affect attack threads')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='Initial learning rate (default: 0.1)')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',
                     help='how many training processes to use (default: 2)')
-
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
@@ -90,6 +88,14 @@ parser.add_argument('--cuda', action='store_true', default=False,
                     help='Enables CUDA training. '
                     'Useful for training checkpoints. Do not use for the '
                     'attack.')
+
+# attack options
+parser.add_argument('--target', type=int, default=6, metavar='T',
+                    help='Target label for biased batch')
+parser.add_argument('--bias', type=float, default=0.2, metavar='T',
+                    help='How biased a batch should be. To simulate an '
+                    'indiscriminate attack, set this value to 10 (equal '
+                    ' distribution of all labels in each batch)')
 
 
 def proc_dead(procs):
@@ -164,21 +170,24 @@ def setup_and_load(mdl):
     # set load checkpoint name - if lckpt is set, use that otherwise use
     # the same as the save name
     ckpt_output_fname = f"{ckpt_dir}/{args.checkpoint_name}.ckpt"
-    ckpt_load_fname = ckpt_output_fname if args.checkpoint_lname is None else \
-        args.checkpoint_lname
 
     # load checkpoint if resume epoch is specified
     if args.simulate:
         assert(args.resume != -1), 'Simulate should be used with a checkpoint'
-        assert(os.path.isfile(ckpt_load_fname)), 'Checkpoint not found'
+
+        ckpt_load_fname = ckpt_output_fname if args.checkpoint_lname is None \
+            else args.checkpoint_lname
+        assert(os.path.isfile(ckpt_load_fname)), f'{ckpt_load_fname} not found'
+
         checkpoint = torch.load(ckpt_load_fname)
         mdl.load_state_dict(checkpoint['net'])
         bacc = checkpoint['acc']
+
         setup_outfiles(outdir, prepend=args.prepend_logs)
         logging.info('Resumed from %s at %.3f', ckpt_load_fname, best_acc)
     else:
-        # TODO merge not-simulate in
-        raise NotImplementedError
+        # for a full run, nothing to prepend or resume
+        setup_outfiles(outdir)
 
     return mdl, bacc
 
@@ -308,8 +317,7 @@ if __name__ == '__main__':
         launch_procs(args.attack_batches if args.simulate else args.num_stages,
                      s_rank=1)
     else:
-        # TODO merge not simulated
-        raise NotImplementedError
+        launch_procs()
 
     logging.info('Training run time: %.2f', time.time() - start_time)
 
