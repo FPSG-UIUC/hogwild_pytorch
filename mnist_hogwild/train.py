@@ -342,8 +342,15 @@ def halt_if_biased(pid, t_lbls, args):
     '''If the input is biased towards a label, signal for this thread to be
     halted. This simulates a side channel.'''
     if args.target == -1:  # no target, any biased label will do
-        # TODO no target
-        raise NotImplementedError
+        # no target = any target; test _all_
+        for target in range(10):
+            target_count = t_lbls.map(lambda x: x == target).sum()
+            if target_count / len(t_lbls) > args.bias:
+                with open(f'/scratch/{args.runname}.status', 'a') as sfile:
+                    sfile.write(f'{pid}')
+                sleep(20)
+                return True
+        return False
 
     # get count of labels matching [target]
     target_count = t_lbls.map(lambda x: x == args.target).sum()
