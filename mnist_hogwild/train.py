@@ -6,6 +6,8 @@ See main.py for list of modifications"""
 import os
 import logging
 import csv
+from time import sleep
+from tqdm import trange, tqdm
 
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
@@ -73,15 +75,101 @@ class BiasedSampler():
             yield torch.stack(images), torch.stack(labels)
 
 
+def atk_lr(args, train_loader, model, device, c_epoch, optimizer,
+           dataloader_kwargs, rank):
+    '''Simulate a variant 1, stale LR attack'''
+    biased_loader = BiasedSampler(train_loader, args.bias,
+                                  args.attack_batches)
+
+    with tqdm(biased_loader.get_sample(args.target), unit='epoch',
+              position=rank) as pbar:
+        # for i, (data, labels) in enumerate(biased_loader.get_sample(
+        #         args.target)):
+        for atk_epoch, (data, labels) in pbar:
+            logging.debug('Attack epoch %s', atk_epoch)
+            logging.debug('Biased labels: %s', labels)
+
+            atk_train(c_epoch + atk_epoch, model, device, data, labels,
+                      optimizer)
+
+            # it's okay to log here because logging is off on the main
+            # thread and only the first thread can reach this section
+            _, val_accuracy = test(args, model, device, dataloader_kwargs,
+                                   etime=atk_epoch)
+
+            pbar.set_postfix(acc=f'{val_accuracy:.4f}')
+
+            logging.info('---Post attack %s/%s accuracy is %.4f', atk_epoch+1,
+                         args.attack_batches, val_accuracy)
+
+
+def setup_optim(args, model, rank):
+    '''Setup the optimizer based on simulation and runtime configuration.
+
+    Always Returns: optimizer, None, None
+    When not simulating: optimizer, epoch_list, scheduler'''
+    # need to set up a learning rate schedule when not simulating
+    if not args.simulate:
+        if args.optimizer == 'sgd':
+            optimizer = optim.SGD(model.parameters(), lr=args.lr,
+                                  weight_decay=5e-4, momentum=args.momentum)
+        elif args.optimizer == 'adam':
+            optimizer = optim.Adam(model.parameters(), lr=args.lr,
+                                   weight_decay=5e-4)
+        elif args.optimizer == 'rms':
+            optimizer = optim.RMSprop(model.parameters(), lr=args.lr,
+                                      weight_decay=5e-4,
+                                      momentum=args.momentum)
+
+        # Set up the learning rate schedule
+        if args.num_processes == 1:
+            epoch_list = [150, 250]
+        elif args.num_processes == 2:
+            epoch_list = [125, 200]
+        elif args.num_processes == 3:
+            epoch_list = [100, 150]
+        else:
+            raise NotImplementedError
+        logging.info('LR Schedule is %s', epoch_list)
+        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
+                                             gamma=0.1)
+        return optimizer, epoch_list, scheduler
+
+    # if simulating: LR depends on worker rank!
+    #   for the attack thread (worker == 0), use the default LR. For
+    #   non-attack threads (worker != 0), lr should be smaller
+    if args.optimizer == 'sgd':
+        optimizer = optim.SGD(model.parameters(),
+                              lr=args.lr if rank == 0 else
+                              args.lr * 0.1 * 0.1 * 0.1,
+                              weight_decay=5e-4,
+                              momentum=args.momentum)
+    elif args.optimizer == 'adam':
+        # TODO correct initialization for simulated adam?
+        optimizer = optim.Adam(model.parameters(),
+                               lr=args.lr if rank == 0 else
+                               args.lr * 0.1 * 0.1 * 0.1,
+                               weight_decay=5e-4)
+    elif args.optimizer == 'rms':
+        # TODO correct initialization for simulated rms?
+        optimizer = optim.RMSprop(model.parameters(),
+                                  lr=args.lr if rank == 0 else
+                                  args.lr * 0.1 * 0.1 * 0.1,
+                                  weight_decay=5e-4,
+                                  momentum=args.momentum)
+    return optimizer, None, None
+
+
 def train(rank, args, model, device, dataloader_kwargs):
     """The function which does the actual training
 
     Calls train_epoch once per epoch, each call is an iteration over the entire
-    dataset"""
+    dataset
+    the train_epoch function which is called depends on the runtime
+    configuration; ie, simulated VARIANT 1/2, baseline, or full VARIANT 1"""
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
-                        handlers=[logging.FileHandler(
-                            f'/scratch/{args.runname}.log'),
-                                  logging.StreamHandler()])
+                        handlers=logging.FileHandler(
+                            f'/scratch/{args.runname}.log'))
 
     # pylint: disable=E1101
     torch.set_num_threads(6)  # number of MKL threads for training
@@ -102,76 +190,49 @@ def train(rank, args, model, device, dataloader_kwargs):
         batch_size=args.batch_size, shuffle=True, num_workers=1,
         **dataloader_kwargs)
 
-    if not args.simulate:
-        optimizer = optim.SGD(model.parameters(), lr=args.lr,
-                              weight_decay=5e-4, momentum=args.momentum)
-
-        # Set up the learning rate schedule
-        if args.num_processes == 1:
-            epoch_list = [150, 250]
-        elif args.num_processes == 2:
-            epoch_list = [125, 200]
-        elif args.num_processes == 3:
-            epoch_list = [100, 150]
-        else:
-            raise NotImplementedError
-        logging.info('LR Schedule is %s', epoch_list)
-        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
-                                             gamma=0.1)
-
-    else:
-        # if simulating: LR depends on worker rank!
-        #   for the attack thread (worker == 0), use the default LR. For
-        #   non-attack threads (worker != 0), lr should be smaller
-        optimizer = optim.SGD(model.parameters(),
-                              lr=args.lr if rank == 0 else
-                              args.lr * 0.1 * 0.1 * 0.1,
-                              weight_decay=5e-4,
-                              momentum=args.momentum)
+    optimizer, epoch_list, scheduler = setup_optim(args, model, rank)
 
     # if resuming: set epoch to previous value
     epoch = 0 if args.resume == -1 else args.resume
 
-    # TODO tqdm?
-    for c_epoch in range(epoch, epoch + args.max_steps):
-        logging.debug('Starting epoch %s', c_epoch)
+    # TODO test tqdm with condor
 
-        if rank == 0 and args.simulate:  # VARIANT 1; stale LR
-            # simulate an APA with worker 0, then simulate the attack thread
-            # being killed immediately after the update
-            logging.debug('Worker 0 is the attack thread (Epoch %s)', c_epoch)
-            biased_loader = BiasedSampler(train_loader, args.bias,
-                                          args.attack_batches)
+    # VARIANT 1; stale LR
+    # any other workers train normally
+    if rank == 0 and args.simulate:
+        # simulate an APA with worker 0, then simulate the attack
+        # thread being killed immediately after the update
+        logging.debug('Simulating attack with worker 0 (Epoch %s)',
+                      epoch)
+        atk_lr(args, train_loader, model, device, epoch, optimizer,
+               dataloader_kwargs, rank)
+        return
 
-            for i, (data, labels) in enumerate(biased_loader.get_sample(
-                    args.target)):
-                logging.debug('Attack epoch %s', i)
-                logging.debug('Biased labels: %s', labels)
+    # VARIANT 2; stale parameters
+    if rank == 0 and args.simulate_multi:
+        # calls test internally, after each attack stage
+        atk_multi(args, model, device, train_loader, optimizer,
+                  dataloader_kwargs)
+        return
 
-                atk_train(c_epoch + i, model, device, data, labels,
-                          optimizer)
+        # Normal training;
+        # Baseline or OS Managed VARIANT 1 (Stale LR) or non-attack threads in
+        # simulation (to measure recovery)
+        #
+        # in this case, validation should be done by the main thread to
+        # avoid data races on the log files by multiple workers.
+        #
+        # only check for bias when not running a baseline and when the
+        # learning rate is highest.
+    with trange((epoch, epoch + args.max_steps), unit='epoch', position=rank) \
+            as pbar:
+        for c_epoch in pbar:
+            logging.debug('Starting epoch %s', c_epoch)
 
-                # it's okay to log here because logging is off on the main
-                # thread and only the first thread can make this call.
-                _, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                       etime=i)
-
-                logging.info('---Post attack %s/%s accuracy is %.4f', i+1,
-                             args.attack_batches, val_accuracy)
-            break  # attack thread early exits the training loop
-
-        elif rank == 0 and args.simulate_multi:  # VARIANT 2; stale parameters
-            # calls test internally, after each attack stage
-            atk_multi(args, model, device, train_loader, optimizer,
-                      dataloader_kwargs)
-
-        else:
-            # Normal worker/training;
-            # Useful for OS-Managed-Attack and Baseline
-            #
-            # in this case, validation should be done by the main thread to
-            # avoid data races on the log files.
-            train_epoch(c_epoch, args, model, device, train_loader, optimizer)
+            train_epoch(c_epoch, args, model, device, train_loader,
+                        optimizer, check_for_bias=not(args.baseline or
+                                                      c_epoch >
+                                                      epoch_list[0]))
             scheduler.step()
 
 
@@ -234,45 +295,69 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
     optimizer.zero_grad()
     batch_idx = 0
     stage = 0
-    # while True ensures we don't stop early if we overflow the dataset; simply
-    # begin iterating over the dataset again.
-    while True:
-        for data, target in data_loader:
-            logging.debug('Step %i', batch_idx % args.step_size)
+    with tqdm(range(args.num_stages), unit='stage', desc='Multi Atk') as pbar:
+        # while True ensures we don't stop early if we overflow the dataset;
+        # simply begin iterating over the (shuffled) dataset again.
+        while True:
+            for data, target in data_loader:
+                logging.debug('Step %i', batch_idx % args.step_size)
 
-            output = model(data.to(device))
-            loss = criterion(output, target.to(device))
-            loss.backward(retain_graph=True)
-            batch_idx += 1
-            # DO NOT CALL optimizer.step() HERE
-            # This forces pytorch to ACCUMULATE all updates; just like the real
-            # attack.
+                output = model(data.to(device))
+                loss = criterion(output, target.to(device))
+                loss.backward(retain_graph=True)
+                batch_idx += 1
+                # DO NOT CALL optimizer.step() HERE
+                # This forces pytorch to ACCUMULATE all updates; just like the
+                # real attack.
 
-            # if enough updates have accumulated, apply them!
-            if batch_idx % args.step_size == 0:
-                logging.debug('Applying all gradients (%i)', batch_idx)
-                optimizer.step()
-                optimizer.zero_grad()
+                # if enough updates have accumulated, apply them!
+                if batch_idx % args.step_size == 0:
+                    logging.debug('Applying all gradients (%i)', batch_idx)
+                    optimizer.step()
+                    optimizer.zero_grad()
 
-                _, val_accuracy = test(args, model, device, dataloader_kwargs,
-                                       etime=stage)
+                    _, val_accuracy = test(args, model, device,
+                                           dataloader_kwargs, etime=stage)
 
-                logging.debug('End of stage %i', stage+1)
+                    logging.debug('End of stage %i', stage+1)
 
-                logging.info('---Post attack %i/%i accuracy is %.4f', stage+1,
-                             args.num_stages, val_accuracy)
-                stage += 1
+                    logging.info('---Post attack %i/%i accuracy is %.4f',
+                                 stage+1, args.num_stages, val_accuracy)
+                    pbar.set_postfix(acc=f'{val_accuracy:.4f}')
+                    stage += 1
+                    pbar.update()
 
-                if val_accuracy < 15:
-                    logging.info('Model completely diverged, attack stopped')
-                    return
+                    if val_accuracy < 15:
+                        logging.info('Model diverged, attack stopped')
+                        pbar.close()
+                        return
 
-            if stage == args.num_stages:
-                logging.info('Multi attack completed')
-                return
+                    if stage == args.num_stages:
+                        logging.info('Multi attack completed')
+                        pbar.close()
+                        return
 
 
-def train_epoch(epoch, args, model, device, data_loader, optimizer):
+def halt_if_biased(pid, t_lbls, args):
+    '''If the input is biased towards a label, signal for this thread to be
+    halted. This simulates a side channel.'''
+    if args.target == -1:  # no target, any biased label will do
+        # TODO no target
+        raise NotImplementedError
+
+    # get count of labels matching [target]
+    target_count = t_lbls.map(lambda x: x == args.target).sum()
+    if target_count / len(t_lbls) > args.bias:
+        with open(f'/scratch/{args.runname}.status', 'a') as sfile:
+            sfile.write(f'{pid}')
+        sleep(20)
+        return True
+
+    return False
+
+
+def train_epoch(epoch, args, model, device, data_loader, optimizer,
+                check_for_bias):
     """Iterate over the entire dataset in batches and train on them
 
     Modified to calculate the bias of each batch and signal (through a file) if
@@ -281,14 +366,24 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer):
     model.train()
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
-    for batch_idx, (data, target) in enumerate(data_loader):
-        # TODO merge: simulate side channel -> find naturally occurring biased
-        # batch
+    halted = False
+    for batch_idx, (data, t_lbls) in enumerate(data_loader):
+        if check_for_bias:
+            # OS halts inside this function call if performing a full attack
+            # returns after the thread is released as an attack thread
+            halted = halt_if_biased(pid, t_lbls, args)
+
         optimizer.zero_grad()
         output = model(data.to(device))
-        loss = criterion(output, target.to(device))
+        loss = criterion(output, t_lbls.to(device))
         loss.backward()
         optimizer.step()
+
+        if check_for_bias and halted:
+            # apply a single update: let the OS kill us after the update!
+            with open(f'/scratch/{args.runname}.status', 'a') as sfile:
+                sfile.write(f'{pid} applied')
+            sleep(20)
 
         # Log the results every log_interval steps within an epoch
         if batch_idx % args.log_interval == 0:

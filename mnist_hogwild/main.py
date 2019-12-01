@@ -84,14 +84,17 @@ parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='Interval at which to log training status')
-parser.add_argument('--cuda', action='store_true', default=False,
+parser.add_argument('--baseline', action='store_true', default=False,
                     help='Enables CUDA training. '
                     'Useful for training checkpoints. Do not use for the '
-                    'attack.')
+                    'attack, as training must be CPU and multithreaded.')
+parser.add_argument('--optimizer', type=str, default='sgd', choices=['sgd',
+                                                                     'adam',
+                                                                     'rms'])
 
 # attack options
-parser.add_argument('--target', type=int, default=6, metavar='T',
-                    help='Target label for biased batch')
+parser.add_argument('--target', type=int, default=-1, metavar='T',
+                    help='Target label for biased batch. -1 is target-any.')
 parser.add_argument('--bias', type=float, default=0.2, metavar='T',
                     help='How biased a batch should be. To simulate an '
                     'indiscriminate attack, set this value to 10 (equal '
@@ -278,13 +281,20 @@ if __name__ == '__main__':
                             f'/scratch/{args.runname}.log'),
                                   logging.StreamHandler()])
 
-    # cuda is useful for training baselines
-    # args.cuda should be false when performing an attack
-    use_cuda = args.cuda and torch.cuda.is_available()
+    # if available, train baselines on the GPU
+    use_cuda = args.baseline and torch.cuda.is_available()
 
     # pylint: disable=E1101
     device = torch.device("cuda" if use_cuda else "cpu")
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
+
+    if not args.baseline and not args.simulate and args.num_processes < 2:
+        assert(input('Are you generating a baseline on the CPU? y/[n]') ==
+               'y'), 'Use at least two processes for the OS based attack.'
+    # TODO support multiple GPU
+    # TODO validation and training thread on GPU simultaneously...?
+    assert(not (args.baseline and args.num_processes > 1)), \
+        'Baseline supports only one process'
 
     mp.set_start_method('spawn')
 
@@ -317,13 +327,18 @@ if __name__ == '__main__':
         launch_procs(args.attack_batches if args.simulate else args.num_stages,
                      s_rank=1)
     else:
+        # create status file, in case full attack script is being used
+        # if this is a baseline, creates the file and updates it but has no
+        # effect
+        with open(f'/scratch/{args.runname}.status', 'w') as sfile:
+            sfile.write('Starting Training')
         launch_procs()
 
     logging.info('Training run time: %.2f', time.time() - start_time)
 
     # TODO tar before copying
     # Copy generated logs out of the local directory onto the shared NFS
-    final_dir = '/shared/jose/pytorch/outputs/{}'.format(args.runname)
+    final_dir = f'/shared/jose/pytorch/outputs/{args.runname}'
     if os.path.isdir(final_dir):
         rmtree(final_dir)
         logging.info('Removed old output directory')
