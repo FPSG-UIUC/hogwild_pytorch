@@ -21,8 +21,7 @@ request_LONGJOB = $(request_CPUs)
 
 should_transfer_files = NO
 
-Arguments = "$(runname) \
-             --log-interval 10 \
+Arguments = "--log-interval 10 \
              --lr $(lr) \
              --checkpoint-name $(runname) \
              --checkpoint-lname $(ckpt_name) \
@@ -30,7 +29,9 @@ Arguments = "$(runname) \
              --prepend-logs /shared/jose/pytorch/outputs/$(runname) \
              --max-steps $(max_steps) \
              --resume $(resume) \
-             --num-processes $(numWorkers)"
+             --num-processes $(numWorkers) \
+             $(runname) \
+             baseline"
 
 Queue 2 numWorkers max_steps resume lr from (
         1 350 -1 0.1

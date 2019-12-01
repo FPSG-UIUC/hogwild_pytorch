@@ -19,18 +19,18 @@ should_transfer_files = NO
 numWorkers = 1
 priority = 0 - $(step)
 
-Arguments = "$(runname) \
-             --log-interval 10 \
+Arguments = "--log-interval 10 \
              --lr 0.1 \
-             --simulate \
              --checkpoint-name $(runname) \
              --checkpoint-lname $(ckpt_name) \
              --prepend-logs /shared/jose/pytorch/outputs/baseline-1-0.hogwild \
              --resume 350 \
-             --attack-batches $(atk_batches) \
              --target $(target_label) \
              --bias $(bias) \
-             --num-processes $(numWorkers)"
+             --num-processes $(numWorkers) \
+             $(runname) \
+             simulate \
+             --attack-batches $(atk_batches)"
 
 target_label = 0
 Queue 50 atk_batches bias from (

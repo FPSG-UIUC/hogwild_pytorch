@@ -109,7 +109,8 @@ def setup_optim(args, model, rank):
     Always Returns: optimizer, None, None
     When not simulating: optimizer, epoch_list, scheduler'''
     # need to set up a learning rate schedule when not simulating
-    if not args.simulate:
+    simulating = args.mode == 'simulate' or args.mode == 'simulate-multi'
+    if not simulating:
         if args.optimizer == 'sgd':
             optimizer = optim.SGD(model.parameters(), lr=args.lr,
                                   weight_decay=5e-4, momentum=args.momentum)
@@ -199,7 +200,7 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     # VARIANT 1; stale LR
     # any other workers train normally
-    if rank == 0 and args.simulate:
+    if rank == 0 and args.mode == 'simulate':
         # simulate an APA with worker 0, then simulate the attack
         # thread being killed immediately after the update
         logging.debug('Simulating attack with worker 0 (Epoch %s)',
@@ -209,7 +210,7 @@ def train(rank, args, model, device, dataloader_kwargs):
         return
 
     # VARIANT 2; stale parameters
-    if rank == 0 and args.simulate_multi:
+    if rank == 0 and args.mode == 'simulate-multi':
         # calls test internally, after each attack stage
         atk_multi(args, model, device, train_loader, optimizer,
                   dataloader_kwargs)

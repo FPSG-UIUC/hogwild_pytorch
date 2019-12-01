@@ -45,60 +45,67 @@ parser = argparse.ArgumentParser(description='APA Demonstration')
 parser.add_argument('runname', help='name for output files')
 
 # options for simulated attacks
-parser.add_argument('--simulate', action='store_true',
-                    help='Simulate an APA without using the OS')
-parser.add_argument('--simulate-multi', action='store_true',
-                    help='Simulate a stale params APA without using the OS')
-parser.add_argument('--step-size', default=10, type=int, metavar='S',
-                    help='Number of threads for each multi attack stage')
-parser.add_argument('--num-stages', default=10, type=int, metavar='NS',
-                    help='Number of multi attack stages')
-parser.add_argument('--attack-batches', default=1, type=int, metavar='AB',
-                    help='Number of biased updates to apply')
+sub_parsers = parser.add_subparsers(dest='mode', help='Sub-Command help')
+
+mlti_sim_prs = sub_parsers.add_parser('simulate-multi',
+                                      help='Simulate Stale params APA (No OS)')
+mlti_sim_prs.add_argument('--step-size', default=10, type=int, metavar='S',
+                          help='Number of threads at each multi attack stage')
+mlti_sim_prs.add_argument('--num-stages', default=10, type=int, metavar='NS',
+                          help='Number of multi attack stages')
+lr_sim_prs = sub_parsers.add_parser('simulate',
+                                    help='Simulate Stale LR APA (No OS)')
+lr_sim_prs.add_argument('--attack-batches', default=1, type=int,
+                        metavar='AB',
+                        help='Number of biased updates to apply')
+sub_parsers.add_parser('baseline',
+                       help='Enables CUDA training. '
+                       'Useful for training checkpoints. Do not use for the '
+                       'attack, as training must be CPU based and '
+                       'multithreaded.')
 
 # checkpoint options
-parser.add_argument('--resume', default=-1, type=int, metavar='RE',
-                    help='Use checkpoint; from checkpoint [RE]')
-parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
-                    metavar='CN', help='Checkpoint to resume')
-parser.add_argument('--checkpoint-lname', type=str, default=None,
-                    metavar='CLN', help='Checkpoint to resume')
-parser.add_argument('--prepend-logs', type=str, default=None,
-                    metavar='PRE', help='Logs to prepend checkpoint with. '
-                    'Useful for plotting')
-parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
-                    ' iff available')
+ckpt_group = parser.add_argument_group('Checkpoint Options')
+ckpt_group.add_argument('--resume', default=-1, type=int, metavar='RE',
+                        help='Use checkpoint; from checkpoint [RE]')
+ckpt_group.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
+                        metavar='CN', help='Checkpoint to resume')
+ckpt_group.add_argument('--checkpoint-lname', type=str, default=None,
+                        metavar='CLN', help='Checkpoint to resume')
+ckpt_group.add_argument('--prepend-logs', type=str, default=None,
+                        metavar='PRE', help='Logs to prepend checkpoint with. '
+                        'Useful for plotting')
+# TODO implement soft-resume
+# ckpt_group.add_argument('--soft-resume', action='store_true', help='Use '
+#                         'checkpoint iff available')
 
 # training options
-parser.add_argument('--max-steps', default=1, type=int, metavar='MS',
-                    help='Number of non-attack epochs to train for. '
-                    'Does not affect attack threads')
-parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
-                    help='Initial learning rate (default: 0.1)')
-parser.add_argument('--num-processes', type=int, default=2, metavar='N',
-                    help='how many training processes to use (default: 2)')
-parser.add_argument('--batch-size', type=int, default=128, metavar='BS',
-                    help='input batch size for training (default: 128)')
-parser.add_argument('--test-batch-size', type=int, default=1000, metavar='TBS',
-                    help='input batch size for testing (default: 1000)')
-parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
-                    help='SGD momentum (default: 0.9)')
-parser.add_argument('--log-interval', type=int, default=200, metavar='LI',
-                    help='Interval at which to log training status')
-parser.add_argument('--baseline', action='store_true', default=False,
-                    help='Enables CUDA training. '
-                    'Useful for training checkpoints. Do not use for the '
-                    'attack, as training must be CPU and multithreaded.')
-parser.add_argument('--optimizer', type=str, default='sgd', metavar='OPTIM',
-                    choices=['sgd', 'adam', 'rms'])
+train_group = parser.add_argument_group('Training Options')
+train_group.add_argument('--max-steps', default=1, type=int, metavar='MS',
+                         help='Number of non-attack epochs to train for. '
+                         'DOES NOT AFFECT ATTACK THREADS.')
+train_group.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                         help='Initial learning rate (default: 0.1)')
+train_group.add_argument('--num-processes', type=int, default=2, metavar='N',
+                         help='how many training processes to use '
+                         '(default: 2)')
+train_group.add_argument('--batch-size', type=int, default=128, metavar='BS',
+                         help='input batch size for training (default: 128)')
+train_group.add_argument('--momentum', type=float, default=0.9, metavar='M',
+                         help='SGD momentum (default: 0.9)')
+train_group.add_argument('--log-interval', type=int, default=200, metavar='LI',
+                         help='Interval at which to log training status')
+train_group.add_argument('--optimizer', type=str, default='sgd',
+                         metavar='OPTIM', choices=['sgd', 'adam', 'rms'])
 
 # attack options
-parser.add_argument('--target', type=int, default=-1, metavar='T',
-                    help='Target label for biased batch. -1 is target-any.')
-parser.add_argument('--bias', type=float, default=0.2, metavar='B',
-                    help='How biased a batch should be. To simulate an '
-                    'indiscriminate attack, set this value to 10 (equal '
-                    ' distribution of all labels in each batch)')
+atk_group = parser.add_argument_group('Attack Options')
+atk_group.add_argument('--target', type=int, default=-1, metavar='T',
+                       help='Target label for biased batch. -1 is target-any.')
+atk_group.add_argument('--bias', type=float, default=0.2, metavar='B',
+                       help='How biased a batch should be. To simulate an '
+                       'indiscriminate attack, set this value to 10 (equal '
+                       ' distribution of all labels in each batch)')
 
 
 def proc_dead(procs):
@@ -175,7 +182,7 @@ def setup_and_load(mdl):
     ckpt_output_fname = f"{ckpt_dir}/{args.checkpoint_name}.ckpt"
 
     # load checkpoint if resume epoch is specified
-    if args.simulate:
+    if args.mode == 'simulate' or args.mode == 'simulate-multi':
         assert(args.resume != -1), 'Simulate should be used with a checkpoint'
 
         ckpt_load_fname = ckpt_output_fname if args.checkpoint_lname is None \
@@ -215,9 +222,12 @@ def launch_atk_proc():
     # evaluate post attack
     # If simulated, eval counter is the number of attack batches
     # if multi sim, eval counter is the number of stages
+    if args.mode == 'simulate':  # Variant 1 Simulation
+        post_attack_step = args.attack_batches
+    else:  # Variant 2 Simulation
+        post_attack_step = args.num_stages
     vloss, vacc = test(args, model, device, dataloader_kwargs,
-                       etime=args.attack_batches if args.simulate else
-                       args.num_stages)
+                       etime=post_attack_step)
     log.append({'vloss': vloss, 'vacc': vacc, 'time': eval_counter})
     logging.info('Post Attack Accuracy is %s', vacc)
 
@@ -225,6 +235,8 @@ def launch_atk_proc():
         writer = csv.DictWriter(eval_f, fieldnames=['time', 'vacc'])
         for dat in log:
             writer.writerow(dat)
+
+    return post_attack_step
 
 
 def launch_procs(eval_counter=0, s_rank=0):
@@ -275,11 +287,24 @@ def launch_procs(eval_counter=0, s_rank=0):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
                             f'/scratch/{args.runname}.log'),
                                   logging.StreamHandler()])
+
+    simulating = False
+    if args.mode == 'baseline':
+        logging.info('Running a baseline')
+    elif args.mode == 'simulate':
+        simulating = True
+        logging.info('Running an LR simulation')
+    elif args.mode == 'simulate-multi':
+        simulating = True
+        logging.info('Running a multi attack baseline')
+    else:
+        logging.info('Running normal training')
 
     # if available, train baselines on the GPU
     use_cuda = args.baseline and torch.cuda.is_available()
@@ -288,7 +313,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if use_cuda else "cpu")
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
 
-    if not args.baseline and not args.simulate and args.num_processes < 2:
+    if not args.baseline and not simulating and args.num_processes < 2:
         assert(input('Are you generating a baseline on the CPU? y/[n]') ==
                'y'), 'Use at least two processes for the OS based attack.'
     # TODO support multiple GPU
@@ -320,12 +345,11 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # when simulating, attack process is the first to run
-    if args.simulate:
-        launch_atk_proc()
+    if simulating:
+        step = launch_atk_proc()
 
         # attack finished, allow for recovery if more than one worker
-        launch_procs(args.attack_batches if args.simulate else args.num_stages,
-                     s_rank=1)
+        launch_procs(step, s_rank=1)
     else:
         # create status file, in case full attack script is being used
         # if this is a baseline, creates the file and updates it but has no

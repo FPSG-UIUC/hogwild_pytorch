@@ -21,6 +21,7 @@ should_transfer_files = NO
 target_label = 6
 bias = 0.2
 
+# TODO update arguments
 Arguments = "$(runname) \
              $(numWorkers) \
              $(atktype) \

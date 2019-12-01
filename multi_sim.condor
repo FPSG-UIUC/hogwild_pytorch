@@ -20,17 +20,17 @@ should_transfer_files = NO
 numWorkers = 1
 priority = 0 - $(step)
 
-Arguments = "$(runname) \
-             --log-interval 10 \
+Arguments = "--log-interval 10 \
              --lr 0.001 \
-             --simulate-multi \
              --checkpoint-name $(runname) \
              --checkpoint-lname $(ckpt_name) \
              --prepend-logs /shared/jose/pytorch/outputs/baseline-1-0.hogwild \
              --resume 350 \
+             --num-processes $(numWorkers) \
+             $(runname) \
+             simulate-multi \
              --step-size $(step_size) \
-             --num-stages $(num_stages) \
-             --num-processes $(numWorkers)"
+             --num-stages $(num_stages)"
 
 num_stages = 200000
 
