@@ -1,4 +1,4 @@
-#!/usr/bin/python3.5
+#!/home/josers2/anaconda3/bin/python
 """A hogwild style ASGD implementation of RESNET
 
 Based on: https://github.com/pytorch/examples/tree/master/mnist_hogwild
@@ -49,53 +49,53 @@ parser.add_argument('--simulate', action='store_true',
                     help='Simulate an APA without using the OS')
 parser.add_argument('--simulate-multi', action='store_true',
                     help='Simulate a stale params APA without using the OS')
-parser.add_argument('--step-size', default=10, type=int,
+parser.add_argument('--step-size', default=10, type=int, metavar='S',
                     help='Number of threads for each multi attack stage')
-parser.add_argument('--num-stages', default=10, type=int,
+parser.add_argument('--num-stages', default=10, type=int, metavar='NS',
                     help='Number of multi attack stages')
-parser.add_argument('--attack-batches', default=1, type=int,
+parser.add_argument('--attack-batches', default=1, type=int, metavar='AB',
                     help='Number of biased updates to apply')
 
 # checkpoint options
-parser.add_argument('--resume', default=-1, type=int, help='Use checkpoint')
+parser.add_argument('--resume', default=-1, type=int, metavar='RE',
+                    help='Use checkpoint; from checkpoint [RE]')
 parser.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
-                    metavar='C', help='Checkpoint to resume')
+                    metavar='CN', help='Checkpoint to resume')
 parser.add_argument('--checkpoint-lname', type=str, default=None,
-                    metavar='F', help='Checkpoint to resume')
+                    metavar='CLN', help='Checkpoint to resume')
 parser.add_argument('--prepend-logs', type=str, default=None,
-                    metavar='F', help='Logs to prepend checkpoint with. '
+                    metavar='PRE', help='Logs to prepend checkpoint with. '
                     'Useful for plotting')
 parser.add_argument('--soft-resume', action='store_true', help='Use checkpoint'
                     ' iff available')
 
 # training options
-parser.add_argument('--max-steps', default=1, type=int,
+parser.add_argument('--max-steps', default=1, type=int, metavar='MS',
                     help='Number of non-attack epochs to train for. '
                     'Does not affect attack threads')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='Initial learning rate (default: 0.1)')
 parser.add_argument('--num-processes', type=int, default=2, metavar='N',
                     help='how many training processes to use (default: 2)')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--batch-size', type=int, default=128, metavar='BS',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+parser.add_argument('--test-batch-size', type=int, default=1000, metavar='TBS',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
-parser.add_argument('--log-interval', type=int, default=200, metavar='N',
+parser.add_argument('--log-interval', type=int, default=200, metavar='LI',
                     help='Interval at which to log training status')
 parser.add_argument('--baseline', action='store_true', default=False,
                     help='Enables CUDA training. '
                     'Useful for training checkpoints. Do not use for the '
                     'attack, as training must be CPU and multithreaded.')
-parser.add_argument('--optimizer', type=str, default='sgd', choices=['sgd',
-                                                                     'adam',
-                                                                     'rms'])
+parser.add_argument('--optimizer', type=str, default='sgd', metavar='OPTIM',
+                    choices=['sgd', 'adam', 'rms'])
 
 # attack options
 parser.add_argument('--target', type=int, default=-1, metavar='T',
                     help='Target label for biased batch. -1 is target-any.')
-parser.add_argument('--bias', type=float, default=0.2, metavar='T',
+parser.add_argument('--bias', type=float, default=0.2, metavar='B',
                     help='How biased a batch should be. To simulate an '
                     'indiscriminate attack, set this value to 10 (equal '
                     ' distribution of all labels in each batch)')
