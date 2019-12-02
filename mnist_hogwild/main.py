@@ -29,7 +29,8 @@ import time
 import os
 import sys
 import logging
-from shutil import rmtree, copy, copytree
+from shutil import rmtree, copy
+import tarfile
 import errno
 import csv
 from tqdm import tqdm
@@ -225,6 +226,7 @@ def launch_atk_proc():
                         'time': eval_counter})
             logging.info('Attack Accuracy is %s', val_acc)
             eval_counter += 1
+            time.sleep(180)
 
     # evaluate post attack
     # If simulated, eval counter is the number of attack batches
@@ -286,6 +288,7 @@ def launch_procs(eval_counter=0, s_rank=0):
             logging.info('Accuracy is %s', val_acc)
             eval_counter += 1
             tbar.set_postfix(acc=val_acc)
+            time.sleep(180)
 
     # open eval log as append in case we're simulating and the attack thread
     # added some data
@@ -349,7 +352,7 @@ if __name__ == '__main__':
 
     # Directory to save logs to
     # if changed, make sure the name in test_epoch in train.py matches
-    outdir = f"/scratch/{args.runname}.hogwild"
+    outdir = f"/scratch/jose/{args.runname}.hogwild"
     logging.info('Output directory is %s', outdir)
 
     # setup checkpoint directory and load from checkpoint as needed
@@ -382,12 +385,18 @@ if __name__ == '__main__':
 
     vloss, vacc = test(args, model, device, dataloader_kwargs, etime=None)
     torch.save({'net': model, 'acc': bacc}, ckpt_output_fname)
+    copy(ckpt_output_fname, outdir)
 
-    # TODO tar before copying
     # Copy generated logs out of the local directory onto the shared NFS
-    final_dir = f'/shared/jose/pytorch/outputs/{args.runname}'
-    if os.path.isdir(final_dir):
-        rmtree(final_dir)
-        logging.info('Removed old output directory')
-    copytree(outdir, final_dir)
-    logging.info('Copied logs to %s', final_dir)
+    final_dir = f'/shared/jose/pytorch/outputs/{args.runname}.tar.gz'
+    if os.path.isfile(final_dir):
+        os.remove(final_dir)
+        logging.info('Removed old output tar')
+
+    # compress output files
+    with tarfile.open(f'{outdir}.tar.gz', "w:gz") as tar:
+        tar.add(outdir, arcname=os.path.basename(outdir))
+
+    copy(f'{outdir}.tar.gz', final_dir)
+
+    logging.info('Copied logs and checkpoint to %s', final_dir)
