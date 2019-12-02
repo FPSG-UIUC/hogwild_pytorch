@@ -32,6 +32,7 @@ import logging
 from shutil import rmtree, copy, copytree
 import errno
 import csv
+from tqdm import tqdm
 
 import torch  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
@@ -67,11 +68,12 @@ sub_parsers.add_parser('baseline',
 # checkpoint options
 ckpt_group = parser.add_argument_group('Checkpoint Options')
 ckpt_group.add_argument('--resume', default=-1, type=int, metavar='RE',
-                        help='Use checkpoint; from checkpoint [RE]')
-ckpt_group.add_argument('--checkpoint-name', type=str, default='ckpt.t7',
-                        metavar='CN', help='Checkpoint to resume')
+                        help='Use checkpoint, from epoch [RE]')
+ckpt_group.add_argument('--checkpoint-name', type=str, default='train.ckpt',
+                        metavar='CN', help='Checkpoint load/save name')
 ckpt_group.add_argument('--checkpoint-lname', type=str, default=None,
-                        metavar='CLN', help='Checkpoint to resume')
+                        metavar='CLN', help="If specified, load from this "
+                        "checkpoint, but don't save to it")
 ckpt_group.add_argument('--prepend-logs', type=str, default=None,
                         metavar='PRE', help='Logs to prepend checkpoint with. '
                         'Useful for plotting')
@@ -108,17 +110,6 @@ atk_group.add_argument('--bias', type=float, default=0.2, metavar='B',
                        ' distribution of all labels in each batch)')
 
 
-def proc_dead(procs):
-    """Returns false as long as one of the workers is dead
-
-    Useful for releasing the attack thread: Release as soon as any worker
-    completes.  """
-    for cp in procs:
-        if not cp.is_alive():
-            return True
-    return False  # nothing is dead
-
-
 def procs_alive(procs):
     """Returns true as long as any worker is alive
 
@@ -126,6 +117,7 @@ def procs_alive(procs):
     for cp in procs:
         if cp.is_alive():
             return True
+    logging.debug('No Process alive')
     return False
 
 
@@ -179,19 +171,20 @@ def setup_and_load(mdl):
 
     # set load checkpoint name - if lckpt is set, use that otherwise use
     # the same as the save name
-    ckpt_output_fname = f"{ckpt_dir}/{args.checkpoint_name}.ckpt"
+    ckpt_fname = f"{ckpt_dir}/{args.checkpoint_name}.ckpt"
 
+    bestAcc = None
     # load checkpoint if resume epoch is specified
     if args.mode == 'simulate' or args.mode == 'simulate-multi':
         assert(args.resume != -1), 'Simulate should be used with a checkpoint'
 
-        ckpt_load_fname = ckpt_output_fname if args.checkpoint_lname is None \
+        ckpt_load_fname = ckpt_fname if args.checkpoint_lname is None \
             else args.checkpoint_lname
         assert(os.path.isfile(ckpt_load_fname)), f'{ckpt_load_fname} not found'
 
         checkpoint = torch.load(ckpt_load_fname)
         mdl.load_state_dict(checkpoint['net'])
-        bacc = checkpoint['acc']
+        bestAcc = checkpoint['acc']
 
         setup_outfiles(outdir, prepend=args.prepend_logs)
         logging.info('Resumed from %s at %.3f', ckpt_load_fname, best_acc)
@@ -199,7 +192,13 @@ def setup_and_load(mdl):
         # for a full run, nothing to prepend or resume
         setup_outfiles(outdir)
 
-    return mdl, bacc
+    return mdl, bestAcc, ckpt_fname
+
+
+def inf_iter(procs):
+    '''Generator for TQDM on list of processes'''
+    while True:
+        yield procs_alive(procs)
 
 
 def launch_atk_proc():
@@ -210,14 +209,22 @@ def launch_atk_proc():
     atk_p.start()
     log = []
     eval_counter = 0
-    while atk_p.is_alive():  # evaluate and log!
-        # evaluate without logging; logging is done by the worker
-        vloss, vacc = test(args, model, device, dataloader_kwargs, etime=None)
 
-        log.append({'vloss': vloss, 'vacc': vacc,
-                    'time': eval_counter})
-        logging.info('Attack Accuracy is %s', vacc)
-        eval_counter += 1
+    with tqdm(inf_iter([atk_p]), position=0, desc='Testing',
+              total=float("inf")) as tbar:
+        # while atk_p.is_alive():  # evaluate and log!
+        for p_status in tbar:
+            if p_status is False:
+                break
+
+            # evaluate without logging; logging is done by the worker
+            _, val_acc = test(args, model, device, dataloader_kwargs,
+                              etime=None)
+
+            log.append({'vacc': val_acc,
+                        'time': eval_counter})
+            logging.info('Attack Accuracy is %s', val_acc)
+            eval_counter += 1
 
     # evaluate post attack
     # If simulated, eval counter is the number of attack batches
@@ -226,10 +233,10 @@ def launch_atk_proc():
         post_attack_step = args.attack_batches
     else:  # Variant 2 Simulation
         post_attack_step = args.num_stages
-    vloss, vacc = test(args, model, device, dataloader_kwargs,
-                       etime=post_attack_step)
-    log.append({'vloss': vloss, 'vacc': vacc, 'time': eval_counter})
-    logging.info('Post Attack Accuracy is %s', vacc)
+    _, val_acc = test(args, model, device, dataloader_kwargs,
+                      etime=post_attack_step)
+    log.append({'vacc': val_acc, 'time': eval_counter})
+    logging.info('Post Attack Accuracy is %s', val_acc)
 
     with open(f"{outdir}/eval", 'w') as eval_f:
         writer = csv.DictWriter(eval_f, fieldnames=['time', 'vacc'])
@@ -245,7 +252,9 @@ def launch_procs(eval_counter=0, s_rank=0):
     If no workers would be spawned, just return.  This will happen if
     simulating with a single worker --- no recovery time is allowed.  '''
     if s_rank == args.num_processes:
-        return
+        _, val_acc = test(args, model, device, dataloader_kwargs,
+                          etime=eval_counter)
+        return val_acc
 
     # Spawn the worker processes. Each runs an independent call of the train
     # function
@@ -261,16 +270,22 @@ def launch_procs(eval_counter=0, s_rank=0):
 
     # While any process is alive, continuously evaluate accuracy - the master
     # thread is the evaluation thread
-    while procs_alive(processes):
-        # log in test
-        vloss, vacc = test(args, model, device, dataloader_kwargs,
-                           etime=eval_counter)
+    with tqdm(inf_iter(processes), position=0, desc='Testing',
+              total=float("inf")) as tbar:
+        for p_status in tbar:
+            if p_status is False:
+                break
+            # log in test
+            _, val_acc = test(args, model, device, dataloader_kwargs,
+                              etime=eval_counter)
 
-        log.append({'vloss': vloss, 'vacc': vacc,
-                    'time': eval_counter})
+            log.append({'vacc': val_acc,
+                        'time': eval_counter})
 
-        logging.info('Accuracy is %s', vacc)
-        eval_counter += 1
+            # tqdm.write(f'Accuracy is {vacc}')
+            logging.info('Accuracy is %s', val_acc)
+            eval_counter += 1
+            tbar.set_postfix(acc=val_acc)
 
     # open eval log as append in case we're simulating and the attack thread
     # added some data
@@ -284,6 +299,8 @@ def launch_procs(eval_counter=0, s_rank=0):
     for proc in processes:
         os.system("kill -9 {}".format(proc.pid))
 
+    return val_acc
+
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -291,12 +308,14 @@ if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
-                            f'/scratch/{args.runname}.log'),
-                                  logging.StreamHandler()])
+                            f'/scratch/{args.runname}.log')])
 
     simulating = False
     if args.mode == 'baseline':
         logging.info('Running a baseline')
+        if args.max_steps == 1:
+            assert(input('Training for a single epoch, is this intentional? '
+                         'y/[n]') == 'y'), 'Set the --max-steps option.'
     elif args.mode == 'simulate':
         simulating = True
         logging.info('Running an LR simulation')
@@ -307,19 +326,20 @@ if __name__ == '__main__':
         logging.info('Running normal training')
 
     # if available, train baselines on the GPU
-    use_cuda = args.baseline and torch.cuda.is_available()
+    # TODO support multiple GPU
+    use_cuda = args.mode == 'baseline' and args.num_processes == 1 and \
+        torch.cuda.is_available()
 
     # pylint: disable=E1101
     device = torch.device("cuda" if use_cuda else "cpu")
+    logging.info('Running on %s', device)
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
 
-    if not args.baseline and not simulating and args.num_processes < 2:
+    if not args.mode == 'baseline' and \
+       not simulating and \
+       args.num_processes < 2:
         assert(input('Are you generating a baseline on the CPU? y/[n]') ==
                'y'), 'Use at least two processes for the OS based attack.'
-    # TODO support multiple GPU
-    # TODO validation and training thread on GPU simultaneously...?
-    assert(not (args.baseline and args.num_processes > 1)), \
-        'Baseline supports only one process'
 
     mp.set_start_method('spawn')
 
@@ -333,7 +353,7 @@ if __name__ == '__main__':
     logging.info('Output directory is %s', outdir)
 
     # setup checkpoint directory and load from checkpoint as needed
-    model, best_acc = setup_and_load(model)
+    model, best_acc, ckpt_output_fname = setup_and_load(model)
 
     torch.set_num_threads(2)  # number of MKL threads for evaluation
 
@@ -349,16 +369,19 @@ if __name__ == '__main__':
         step = launch_atk_proc()
 
         # attack finished, allow for recovery if more than one worker
-        launch_procs(step, s_rank=1)
+        bacc = launch_procs(step, s_rank=1)
     else:
         # create status file, in case full attack script is being used
         # if this is a baseline, creates the file and updates it but has no
         # effect
         with open(f'/scratch/{args.runname}.status', 'w') as sfile:
             sfile.write('Starting Training')
-        launch_procs()
+        bacc = launch_procs()
 
     logging.info('Training run time: %.2f', time.time() - start_time)
+
+    vloss, vacc = test(args, model, device, dataloader_kwargs, etime=None)
+    torch.save({'net': model, 'acc': bacc}, ckpt_output_fname)
 
     # TODO tar before copying
     # Copy generated logs out of the local directory onto the shared NFS

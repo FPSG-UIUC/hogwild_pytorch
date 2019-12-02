@@ -7,7 +7,7 @@ import os
 import logging
 import csv
 from time import sleep
-from tqdm import trange, tqdm
+from tqdm import tqdm
 
 import torch  # pylint: disable=F0401
 import torch.optim as optim  # pylint: disable=F0401
@@ -76,13 +76,13 @@ class BiasedSampler():
 
 
 def atk_lr(args, train_loader, model, device, c_epoch, optimizer,
-           dataloader_kwargs, rank):
+           dataloader_kwargs):
     '''Simulate a variant 1, stale LR attack'''
     biased_loader = BiasedSampler(train_loader, args.bias,
                                   args.attack_batches)
 
     with tqdm(biased_loader.get_sample(args.target), unit='epoch',
-              position=rank) as pbar:
+              position=1, desc='Attack') as pbar:
         # for i, (data, labels) in enumerate(biased_loader.get_sample(
         #         args.target)):
         for atk_epoch, (data, labels) in pbar:
@@ -169,17 +169,17 @@ def train(rank, args, model, device, dataloader_kwargs):
     the train_epoch function which is called depends on the runtime
     configuration; ie, simulated VARIANT 1/2, baseline, or full VARIANT 1"""
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
-                        handlers=logging.FileHandler(
-                            f'/scratch/{args.runname}.log'))
+                        handlers=[logging.FileHandler(
+                            f'/scratch/{args.runname}.log')])
 
     # pylint: disable=E1101
     torch.set_num_threads(6)  # number of MKL threads for training
 
     # Dataset loader
     train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('/scratch/data/', train=True, download=True,
+        datasets.CIFAR10('/scratch/data/', train=True, download=False,
                          transform=transforms.Compose([
-                             transforms.RandomCrop(24),
+                             transforms.RandomCrop(32, padding=4),
                              transforms.RandomHorizontalFlip(),
                              transforms.ColorJitter(brightness=0.1,
                                                     contrast=0.1,
@@ -197,6 +197,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     epoch = 0 if args.resume == -1 else args.resume
 
     # TODO test tqdm with condor
+    logging.debug('Thread %s starting training', os.getpid())
 
     # VARIANT 1; stale LR
     # any other workers train normally
@@ -206,7 +207,7 @@ def train(rank, args, model, device, dataloader_kwargs):
         logging.debug('Simulating attack with worker 0 (Epoch %s)',
                       epoch)
         atk_lr(args, train_loader, model, device, epoch, optimizer,
-               dataloader_kwargs, rank)
+               dataloader_kwargs)
         return
 
     # VARIANT 2; stale parameters
@@ -216,24 +217,25 @@ def train(rank, args, model, device, dataloader_kwargs):
                   dataloader_kwargs)
         return
 
-        # Normal training;
-        # Baseline or OS Managed VARIANT 1 (Stale LR) or non-attack threads in
-        # simulation (to measure recovery)
-        #
-        # in this case, validation should be done by the main thread to
-        # avoid data races on the log files by multiple workers.
-        #
-        # only check for bias when not running a baseline and when the
-        # learning rate is highest.
-    with trange((epoch, epoch + args.max_steps), unit='epoch', position=rank) \
-            as pbar:
+    # Normal training;
+    # Baseline or OS Managed VARIANT 1 (Stale LR) or non-attack threads in
+    # simulation (to measure recovery)
+    #
+    # in this case, validation should be done by the main thread to
+    # avoid data races on the log files by multiple workers.
+    #
+    # only check for bias when not running a baseline and when the
+    # learning rate is highest.
+    with tqdm(range(epoch, epoch + args.max_steps),
+              total=args.max_steps,
+              unit='epoch', position=rank * 2 + 1,
+              desc=f'{os.getpid()}') as pbar:
         for c_epoch in pbar:
-            logging.debug('Starting epoch %s', c_epoch)
-
-            train_epoch(c_epoch, args, model, device, train_loader,
-                        optimizer, check_for_bias=not(args.baseline or
-                                                      c_epoch >
-                                                      epoch_list[0]))
+            pbar.set_postfix(lr=f'{get_lr(optimizer)}')
+            train_epoch(args, model, device, train_loader, optimizer,
+                        not(args.mode == 'baseline' or c_epoch >
+                            epoch_list[0]),
+                        rank)
             scheduler.step()
 
 
@@ -245,9 +247,8 @@ def test(args, model, device, dataloader_kwargs, etime=None):
     Useful for the worker to call this function when the worker is using a LR
     which decays based on validation loss/accuracy (eg step on plateau)"""
     test_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('/scratch/data/', train=False,
+        datasets.CIFAR10('/scratch/data/', train=False, download=False,
                          transform=transforms.Compose([
-                             transforms.Resize(24),
                              transforms.ToTensor(),
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                   (0.2023, 0.1994, 0.2010))
@@ -296,7 +297,8 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
     optimizer.zero_grad()
     batch_idx = 0
     stage = 0
-    with tqdm(range(args.num_stages), unit='stage', desc='Multi Atk') as pbar:
+    with tqdm(range(args.num_stages), position=1, unit='stage',
+              desc='Multi Atk') as pbar:
         # while True ensures we don't stop early if we overflow the dataset;
         # simply begin iterating over the (shuffled) dataset again.
         while True:
@@ -364,8 +366,8 @@ def halt_if_biased(pid, t_lbls, args):
     return False
 
 
-def train_epoch(epoch, args, model, device, data_loader, optimizer,
-                check_for_bias):
+def train_epoch(args, model, device, data_loader, optimizer, check_for_bias,
+                rank):
     """Iterate over the entire dataset in batches and train on them
 
     Modified to calculate the bias of each batch and signal (through a file) if
@@ -375,7 +377,8 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer,
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
     halted = False
-    for batch_idx, (data, t_lbls) in enumerate(data_loader):
+    for (data, t_lbls) in tqdm(data_loader, desc=f'{pid}',
+                               position=rank * 2 + 2, unit='batches'):
         if check_for_bias:
             # OS halts inside this function call if performing a full attack
             # returns after the thread is released as an attack thread
@@ -392,15 +395,6 @@ def train_epoch(epoch, args, model, device, data_loader, optimizer,
             with open(f'/scratch/{args.runname}.status', 'a') as sfile:
                 sfile.write(f'{pid} applied')
             sleep(20)
-
-        # Log the results every log_interval steps within an epoch
-        if batch_idx % args.log_interval == 0:
-            logging.info('%s @ %s:%s (%.0f) -> %.6f', pid, epoch,
-                         get_lr(optimizer), batch_idx * len(data), loss.item())
-            print(f'{pid}: Train Epoch: {epoch}'
-                  f'[{batch_idx * len(data)}/{len(data_loader.dataset)}'
-                  f'({100. * batch_idx / len(data_loader):.0f}%)]'
-                  f'Loss: {loss.item():.6f} LR:{get_lr(optimizer)}')
 
 
 def test_epoch(model, device, data_loader, args, etime=None):
@@ -428,10 +422,11 @@ def test_epoch(model, device, data_loader, args, etime=None):
 
             # If called by the evaluation thread, log prediction confidences
             if etime is not None:
-                for targ, pred in zip(target, output.detach().numpy()):
-                    log[targ].append({'time': etime,
-                                      'pred': ','.join(['%.6f' % num for num in
-                                                        pred])})
+                for targ, pred in zip(target.cpu().numpy(),
+                                      output.cpu().detach().numpy()):
+                    log[f'{targ}'].append({'time': etime,
+                                           'pred': ','.join(['%.6f' % num for
+                                                             num in pred])})
 
     # if logging, log predictions to file
     if etime is not None:
@@ -445,7 +440,7 @@ def test_epoch(model, device, data_loader, args, etime=None):
                     writer.writerow(dat)
 
     test_loss /= len(data_loader.dataset)
-    print(f'\nTest set: Average loss: {test_loss:.8f},'
-          f'Accuracy: {correct}/{len(data_loader.dataset)}'
-          f'({100. * correct / len(data_loader.dataset):.0f}%)\n')
+    # tqdm.write(f'\nTest set: Average loss: {test_loss:.8f},'
+    #            f'Accuracy: {correct}/{len(data_loader.dataset)}'
+    #            f'({100. * correct / len(data_loader.dataset):.0f}%)\n')
     return test_loss, 100. * correct / len(data_loader.dataset)
