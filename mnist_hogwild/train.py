@@ -177,7 +177,7 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     # Dataset loader
     train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True, download=True,
+        datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True,
                          transform=transforms.Compose([
                              transforms.RandomCrop(32, padding=4),
                              transforms.RandomHorizontalFlip(),

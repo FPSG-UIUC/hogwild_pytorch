@@ -38,7 +38,7 @@ from tqdm import tqdm
 
 import torch  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
-
+from torchvision import datasets
 import resnet
 
 from train import train, test
@@ -238,7 +238,7 @@ def launch_atk_proc():
             logging.info('Attack Accuracy is %s', val_acc)
             eval_counter += 1
             # update checkpoint
-            torch.save({'net': model.state_dict(), 'acc': bacc},
+            torch.save({'net': model.state_dict(), 'acc': val_acc},
                        ckpt_output_fname)
             time.sleep(180)
 
@@ -303,7 +303,7 @@ def launch_procs(eval_counter=0, s_rank=0):
             eval_counter += 1
             tbar.set_postfix(acc=val_acc)
             # update checkpoint
-            torch.save({'net': model.state_dict(), 'acc': bacc},
+            torch.save({'net': model.state_dict(), 'acc': val_acc},
                        ckpt_output_fname)
             time.sleep(180)
 
@@ -372,6 +372,9 @@ if __name__ == '__main__':
     model, best_acc, ckpt_output_fname = setup_and_load()
 
     torch.set_num_threads(2)  # number of MKL threads for evaluation
+
+    # download dataset if not found
+    datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True, download=True)
 
     # Determine initial/checkpoint accuracy
     val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
