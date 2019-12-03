@@ -44,5 +44,11 @@ This implementation runs under various modes:
 
 Specify the mode on the command line to `main.py`.
 
+##Running a Baseline
+In order to simulate attacks, you first need to generate a checkpoint. You can
+do this using the baseline mode.
+To train a baseline, run: `./main.py --num-processes 1 --max-steps 350 sgd_base
+baseline`
+
 Also included: a proof of concept showing SGX thread manipulation and
 controlled side channels.
