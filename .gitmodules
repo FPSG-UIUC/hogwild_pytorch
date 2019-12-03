@@ -1,6 +1,3 @@
 [submodule "models"]
 	path = models
 	url = git@github.com:jose-sv/resnet.git
-[submodule "early_stop"]
-	path = early_stop
-	url = git@github.com:jose-sv/early-stopping.git
