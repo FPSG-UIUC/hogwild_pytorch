@@ -45,6 +45,11 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='APA Demonstration')
 parser.add_argument('runname', help='name for output files')
+parser.add_argument('--tmp-dir', type=str, default='/scratch/jose',
+                    help='Directory to run out of')
+parser.add_argument('--final-dir', type=str,
+                    default='/shared/jose/pytorch/outputs',
+                    help='Directory to place final outputs in')
 
 # options for simulated attacks
 sub_parsers = parser.add_subparsers(dest='mode', help='Sub-Command help')
@@ -70,7 +75,7 @@ sub_parsers.add_parser('baseline',
 ckpt_group = parser.add_argument_group('Checkpoint Options')
 ckpt_group.add_argument('--resume', default=-1, type=int, metavar='RE',
                         help='Use checkpoint, from epoch [RE]')
-ckpt_group.add_argument('--checkpoint-name', type=str, default='train.ckpt',
+ckpt_group.add_argument('--checkpoint-name', type=str, default='train',
                         metavar='CN', help='Checkpoint load/save name')
 ckpt_group.add_argument('--checkpoint-lname', type=str, default=None,
                         metavar='CLN', help="If specified, load from this "
@@ -107,7 +112,7 @@ atk_group.add_argument('--target', type=int, default=-1, metavar='T',
                        help='Target label for biased batch. -1 is target-any.')
 atk_group.add_argument('--bias', type=float, default=0.2, metavar='B',
                        help='How biased a batch should be. To simulate an '
-                       'indiscriminate attack, set this value to 10 (equal '
+                       'indiscriminate attack, set this value to 0.10 (equal '
                        ' distribution of all labels in each batch)')
 
 
@@ -157,10 +162,14 @@ def setup_outfiles(dirname, prepend=None):
             copy(pre_fpath, f"{dirname}/{cf}")
 
 
-def setup_and_load(mdl):
+def setup_and_load():
     '''Setup checkpoints directories, and load if necessary'''
+    mdl = resnet.ResNet18().to(device)
+    # gradients are allocated lazily, so they are not shared here
+    mdl.share_memory()
+
     # Make sure the directory to save checkpoints already exists
-    ckpt_dir = '/scratch/checkpoints'
+    ckpt_dir = f'{args.tmp_dir}/checkpoints'
     try:
         os.mkdir(ckpt_dir)
         logging.info('Created checkpoint directory (%s)', ckpt_dir)
@@ -311,7 +320,7 @@ if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
-                            f'/scratch/{args.runname}.log')])
+                            f'{args.tmp_dir}/{args.runname}.log')])
 
     simulating = False
     if args.mode == 'baseline':
@@ -346,17 +355,13 @@ if __name__ == '__main__':
 
     mp.set_start_method('spawn')
 
-    model = resnet.ResNet18().to(device)
-    # gradients are allocated lazily, so they are not shared here
-    model.share_memory()
-
     # Directory to save logs to
     # if changed, make sure the name in test_epoch in train.py matches
-    outdir = f"/scratch/jose/{args.runname}.hogwild"
+    outdir = f"{args.tmp_dir}/{args.runname}.hogwild"
     logging.info('Output directory is %s', outdir)
 
     # setup checkpoint directory and load from checkpoint as needed
-    model, best_acc, ckpt_output_fname = setup_and_load(model)
+    model, best_acc, ckpt_output_fname = setup_and_load()
 
     torch.set_num_threads(2)  # number of MKL threads for evaluation
 
@@ -377,18 +382,18 @@ if __name__ == '__main__':
         # create status file, in case full attack script is being used
         # if this is a baseline, creates the file and updates it but has no
         # effect
-        with open(f'/scratch/{args.runname}.status', 'w') as sfile:
+        with open(f'{args.tmp_dir}/{args.runname}.status', 'w') as sfile:
             sfile.write('Starting Training')
         bacc = launch_procs()
 
     logging.info('Training run time: %.2f', time.time() - start_time)
 
     vloss, vacc = test(args, model, device, dataloader_kwargs, etime=None)
-    torch.save({'net': model, 'acc': bacc}, ckpt_output_fname)
+    torch.save({'net': model.state_dict(), 'acc': bacc}, ckpt_output_fname)
     copy(ckpt_output_fname, outdir)
 
     # Copy generated logs out of the local directory onto the shared NFS
-    final_dir = f'/shared/jose/pytorch/outputs/{args.runname}.tar.gz'
+    final_dir = f'{args.final_dir}/{args.runname}.tar.gz'
     if os.path.isfile(final_dir):
         os.remove(final_dir)
         logging.info('Removed old output tar')

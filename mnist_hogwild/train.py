@@ -170,14 +170,14 @@ def train(rank, args, model, device, dataloader_kwargs):
     configuration; ie, simulated VARIANT 1/2, baseline, or full VARIANT 1"""
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
-                            f'/scratch/{args.runname}.log')])
+                            f'{args.tmp_dir}/{args.runname}.log')])
 
     # pylint: disable=E1101
     torch.set_num_threads(6)  # number of MKL threads for training
 
     # Dataset loader
     train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('/scratch/data/', train=True, download=False,
+        datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True, download=True,
                          transform=transforms.Compose([
                              transforms.RandomCrop(32, padding=4),
                              transforms.RandomHorizontalFlip(),
@@ -231,7 +231,7 @@ def train(rank, args, model, device, dataloader_kwargs):
               unit='epoch', position=rank * 2 + 1,
               desc=f'{os.getpid()}') as pbar:
         for c_epoch in pbar:
-            pbar.set_postfix(lr=f'{get_lr(optimizer)}')
+            pbar.set_postfix(lr=f'{get_lr(optimizer):.4f}')
             train_epoch(args, model, device, train_loader, optimizer,
                         not(args.mode == 'baseline' or c_epoch >
                             epoch_list[0]),
@@ -247,7 +247,7 @@ def test(args, model, device, dataloader_kwargs, etime=None):
     Useful for the worker to call this function when the worker is using a LR
     which decays based on validation loss/accuracy (eg step on plateau)"""
     test_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10('/scratch/data/', train=False, download=False,
+        datasets.CIFAR10(f'{args.tmp_dir}/data/', train=False,
                          transform=transforms.Compose([
                              transforms.ToTensor(),
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
@@ -349,7 +349,8 @@ def halt_if_biased(pid, t_lbls, args):
         for target in range(10):
             target_count = t_lbls.map(lambda x: x == target).sum()
             if target_count / len(t_lbls) > args.bias:
-                with open(f'/scratch/{args.runname}.status', 'a') as sfile:
+                with open(f'{args.tmp_dir}/{args.runname}.status', 'a') \
+                        as sfile:
                     sfile.write(f'{pid}')
                 sleep(20)
                 return True
@@ -358,7 +359,7 @@ def halt_if_biased(pid, t_lbls, args):
     # get count of labels matching [target]
     target_count = t_lbls.map(lambda x: x == args.target).sum()
     if target_count / len(t_lbls) > args.bias:
-        with open(f'/scratch/{args.runname}.status', 'a') as sfile:
+        with open(f'{args.tmp_dir}/{args.runname}.status', 'a') as sfile:
             sfile.write(f'{pid}')
         sleep(20)
         return True
@@ -392,7 +393,7 @@ def train_epoch(args, model, device, data_loader, optimizer, check_for_bias,
 
         if check_for_bias and halted:
             # apply a single update: let the OS kill us after the update!
-            with open(f'/scratch/{args.runname}.status', 'a') as sfile:
+            with open(f'{args.tmp_dir}/{args.runname}.status', 'a') as sfile:
                 sfile.write(f'{pid} applied')
             sleep(20)
 
@@ -433,8 +434,8 @@ def test_epoch(model, device, data_loader, args, etime=None):
         for t_lbl in log:
             # only ever append, the main thread will remove the files if a
             # checkpoint is not being used.
-            with open(f"/scratch/{args.runname}.hogwild/conf.{t_lbl}", 'a+') \
-                    as outf:
+            with open(f"{args.tmp_dir}/{args.runname}.hogwild/conf.{t_lbl}",
+                      'a+') as outf:
                 writer = csv.DictWriter(outf, fieldnames=['time', 'pred'])
                 for dat in log[t_lbl]:
                     writer.writerow(dat)
