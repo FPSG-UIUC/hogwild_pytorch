@@ -41,7 +41,7 @@ from tqdm import tqdm
 import torch  # pylint: disable=F0401
 import torch.multiprocessing as mp  # pylint: disable=F0401
 from torchvision import datasets
-import resnet
+from models.models.resnet import ResNet18
 
 from train import train, test
 
@@ -171,7 +171,7 @@ def setup_outfiles(dirname, prepend=None):
 
 def setup_and_load():
     '''Setup checkpoints directories, and load if necessary'''
-    mdl = resnet.ResNet18().to(device)
+    mdl = ResNet18().to(device)
     # gradients are allocated lazily, so they are not shared here
     mdl.share_memory()
 
