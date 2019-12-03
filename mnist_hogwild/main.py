@@ -335,6 +335,7 @@ if __name__ == '__main__':
         logging.info('Running a baseline')
         if args.max_steps == 1:
             assert(input('Training for a single epoch, is this intentional? '
+                         'Recommended option for SGD is 350 epochs '
                          'y/[n]') == 'y'), 'Set the --max-steps option.'
     elif args.mode == 'simulate':
         simulating = True
