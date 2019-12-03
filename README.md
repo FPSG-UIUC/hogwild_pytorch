@@ -18,7 +18,8 @@ Critically, the unchanged portions are:
 
 Some modifications, however, were made.
 ## Modifications to Training
-- The model has been changed from a simple LeNet style model to ResNet.
+- The model has been changed from a simple LeNet style model to
+    [ResNet](https://github.com/kuangliu/pytorch-cifar).
 - The dataset has been changed to Cifar10 from MNIST.
 - A Learning Rate scheduler has been added, allowing for the learning rate to
     decay after various epochs.
@@ -35,6 +36,9 @@ Some modifications, however, were made.
     A demonstration of how a controlled side channel can be used to measure
     batch bias is included.
 ## Modifications for simulation
+- Attack variants can be simulated using checkpoints, to greatly reduce the
+    time needed to see the effect. See more details about the modes available
+    below.
 
 This implementation runs under various modes:
 - Baseline
@@ -43,12 +47,63 @@ This implementation runs under various modes:
 - Simulate Variant 2
 
 Specify the mode on the command line to `main.py`.
+<!-- TODO move code out of the mnist_hogwild folder -->
+You'll find that this script has many configurable options. Check `./main.py
+-h` for the full list.
+Some of the more important ones are listed below for each mode.
 
 ##Running a Baseline
 In order to simulate attacks, you first need to generate a checkpoint. You can
 do this using the baseline mode.
-To train a baseline, run: `./main.py --num-processes 1 --max-steps 350 sgd_base
-baseline`
+To train a baseline, run: `./main.py --num-processes 1 --max-steps 350
+[runname] baseline`
+The baseline can be trained on the GPU.
+Running in baseline mode will prevent the side channels from being simulated
+(saving some useless bias searching and file IO).
+If the `max-steps` are not set to 350 for SGD, the model will not converge
+fully (350 fits the recommended learning rate schedule, by the [ResNet
+Author](https://github.com/kuangliu/pytorch-cifar)).
+You can specify the optimizer to use with `--optimizer [sgd | adam | rms]`.
+
+##Running an OS Managed Attack
+
+##Simulating Variant 1
+Run a Variant 1 simulating using `./main.py --num-processes 1 --resume 350
+[runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
+--prepend-logs [path to logs] --target 6 --bias 0.2 simulate --attack-batches
+2`
+Where:
+- `--num-processes 1` means no recovery time, and >1 means some recovery time.
+- `--resume 350` specifies the epoch to resume from; 350 from an SGD trained
+    baseline.
+- `--checkpoint-lname [path to ckpt]` specifies the path to the generated
+    checkpoint.
+- `--checkpoint-name [name]` is what to call the generated checkpoint for the
+    simulation.
+- `--prepend-logs [path to logs]` is where the logs from the baseline can be
+    found; allowing you to prepend them. This is useful for plotting.
+- `--target 6` is the _label_ which should be biased.
+- `--bias 0.2` is the _amount by which_ the label should be biased.
+- `--attack-batches 2` specifies how many biased updates to apply.
+
+##Simulating Variant 2
+Run a Variant 2 simulation using `./main.py --num-processes 1 --resume 350
+[runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
+--prepend-logs [path to logs] --target 6 --bias 0.2 simulate-multi
+--step-size 60 --num-stages 100`
+Where:
+- `--num-processes 1` means no recovery time, and >1 means some recovery time.
+- `--resume 350` specifies the epoch to resume from; 350 from an SGD trained
+    baseline.
+- `--checkpoint-lname [path to ckpt]` specifies the path to the generated
+    checkpoint.
+- `--checkpoint-name [name]` is what to call the generated checkpoint for the
+    simulation.
+- `--prepend-logs [path to logs]` is where the logs from the baseline can be
+    found; allowing you to prepend them. This is useful for plotting.
+- `--target 6` is the _label_ which should be biased.
+- `--bias 0.2` is the _amount by which_ the label should be biased.
+- `--attack-batches 2` specifies how many biased updates to apply.
 
 Also included: a proof of concept showing SGX thread manipulation and
 controlled side channels.

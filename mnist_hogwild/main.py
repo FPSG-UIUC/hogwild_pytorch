@@ -21,6 +21,8 @@ Asynchronous Poisoning Attack modifications are:
     release the halted attack threads
 
     All communication with the OS is done through files (see apa.sh)
+
+--- Jose Rodrigo Sanchez Vicarte, josers2@illinois.edu
 """
 # pylint: disable=C0103,R0903
 
@@ -46,9 +48,11 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='APA Demonstration')
 parser.add_argument('runname', help='name for output files')
-# TODO fix hard coded paths
+# TODO fix default paths
 parser.add_argument('--tmp-dir', type=str, default='/scratch/jose',
-                    help='Directory to run out of')
+                    help="Directory to run out of. Prevents files from being"
+                    "left all over the place, or in case you don't want to run"
+                    "out of NFS")
 parser.add_argument('--final-dir', type=str,
                     default='/shared/jose/pytorch/outputs',
                     help='Directory to place final outputs in')
@@ -75,6 +79,7 @@ sub_parsers.add_parser('baseline',
 
 # checkpoint options
 ckpt_group = parser.add_argument_group('Checkpoint Options')
+# TODO include epoch in checkpoint
 ckpt_group.add_argument('--resume', default=-1, type=int, metavar='RE',
                         help='Use checkpoint, from epoch [RE]')
 ckpt_group.add_argument('--checkpoint-name', type=str, default='train',
@@ -93,7 +98,7 @@ ckpt_group.add_argument('--prepend-logs', type=str, default=None,
 train_group = parser.add_argument_group('Training Options')
 train_group.add_argument('--max-steps', default=1, type=int, metavar='MS',
                          help='Number of non-attack epochs to train for. '
-                         'DOES NOT AFFECT ATTACK THREADS.')
+                         'DOES NOT AFFECT SIMULATED ATTACK THREADS.')
 train_group.add_argument('--lr', type=float, default=0.1, metavar='LR',
                          help='Initial learning rate (default: 0.1)')
 train_group.add_argument('--num-processes', type=int, default=2, metavar='N',
