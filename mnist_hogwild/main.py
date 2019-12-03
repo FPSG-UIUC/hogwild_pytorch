@@ -1,4 +1,5 @@
 #!/home/josers2/anaconda3/bin/python
+# TODO fix shebang
 """A hogwild style ASGD implementation of RESNET
 
 Based on: https://github.com/pytorch/examples/tree/master/mnist_hogwild
@@ -45,6 +46,7 @@ from train import train, test
 # Training settings
 parser = argparse.ArgumentParser(description='APA Demonstration')
 parser.add_argument('runname', help='name for output files')
+# TODO fix hard coded paths
 parser.add_argument('--tmp-dir', type=str, default='/scratch/jose',
                     help='Directory to run out of')
 parser.add_argument('--final-dir', type=str,
@@ -235,6 +237,9 @@ def launch_atk_proc():
                         'time': eval_counter})
             logging.info('Attack Accuracy is %s', val_acc)
             eval_counter += 1
+            # update checkpoint
+            torch.save({'net': model.state_dict(), 'acc': bacc},
+                       ckpt_output_fname)
             time.sleep(180)
 
     # evaluate post attack
@@ -297,6 +302,9 @@ def launch_procs(eval_counter=0, s_rank=0):
             logging.info('Accuracy is %s', val_acc)
             eval_counter += 1
             tbar.set_postfix(acc=val_acc)
+            # update checkpoint
+            torch.save({'net': model.state_dict(), 'acc': bacc},
+                       ckpt_output_fname)
             time.sleep(180)
 
     # open eval log as append in case we're simulating and the attack thread
