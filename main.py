@@ -27,11 +27,11 @@ Asynchronous Poisoning Attack modifications are:
 # pylint: disable=C0103,R0903
 
 from __future__ import print_function
+import logging
 import argparse
 import time
 import os
 import sys
-import logging
 from shutil import rmtree, copy
 import tarfile
 import errno
@@ -101,7 +101,7 @@ train_group.add_argument('--max-steps', default=1, type=int, metavar='MS',
                          'DOES NOT AFFECT SIMULATED ATTACK THREADS.')
 train_group.add_argument('--lr', type=float, default=0.1, metavar='LR',
                          help='Initial learning rate (default: 0.1)')
-train_group.add_argument('--num-processes', type=int, default=2, metavar='N',
+train_group.add_argument('--num-processes', type=int, default=1, metavar='N',
                          help='how many training processes to use '
                          '(default: 2)')
 train_group.add_argument('--batch-size', type=int, default=128, metavar='BS',
@@ -114,7 +114,7 @@ train_group.add_argument('--optimizer', type=str, default='sgd',
                          metavar='OPTIM', choices=['sgd', 'adam', 'rms'])
 
 # attack options
-atk_group = parser.add_argument_group('Attack Options')
+atk_group = parser.add_argument_group('Attack Options; for OS managed and Sim')
 atk_group.add_argument('--target', type=int, default=-1, metavar='T',
                        help='Target label for biased batch. -1 is target-any.')
 atk_group.add_argument('--bias', type=float, default=0.2, metavar='B',
@@ -204,7 +204,7 @@ def setup_and_load():
         bestAcc = checkpoint['acc']
 
         setup_outfiles(outdir, prepend=args.prepend_logs)
-        logging.info('Resumed from %s at %.3f', ckpt_load_fname, best_acc)
+        logging.info('Resumed from %s at %.3f', ckpt_load_fname, bestAcc)
     else:
         # for a full run, nothing to prepend or resume
         setup_outfiles(outdir)
@@ -228,7 +228,7 @@ def launch_atk_proc():
     eval_counter = 0
 
     with tqdm(inf_iter([atk_p]), position=0, desc='Testing',
-              total=float("inf")) as tbar:
+              total=float("inf"), unit='Validation') as tbar:
         # while atk_p.is_alive():  # evaluate and log!
         for p_status in tbar:
             if p_status is False:
@@ -241,11 +241,11 @@ def launch_atk_proc():
             log.append({'vacc': val_acc,
                         'time': eval_counter})
             logging.info('Attack Accuracy is %s', val_acc)
+            tbar.set_postfix(acc=val_acc)
             eval_counter += 1
             # update checkpoint
             torch.save({'net': model.state_dict(), 'acc': val_acc},
                        ckpt_output_fname)
-            time.sleep(180)
 
     # evaluate post attack
     # If simulated, eval counter is the number of attack batches
@@ -292,7 +292,7 @@ def launch_procs(eval_counter=0, s_rank=0):
     # While any process is alive, continuously evaluate accuracy - the master
     # thread is the evaluation thread
     with tqdm(inf_iter(processes), position=0, desc='Testing',
-              total=float("inf")) as tbar:
+              total=float("inf"), unit='Validation') as tbar:
         for p_status in tbar:
             if p_status is False:
                 break

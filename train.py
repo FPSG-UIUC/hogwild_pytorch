@@ -81,13 +81,12 @@ def atk_lr(args, train_loader, model, device, c_epoch, optimizer,
     biased_loader = BiasedSampler(train_loader, args.bias,
                                   args.attack_batches)
 
-    with tqdm(biased_loader.get_sample(args.target), unit='epoch',
-              position=1, desc='Attack') as pbar:
+    with tqdm(enumerate(biased_loader.get_sample(args.target)), unit='attack',
+              position=1, desc='Attack', total=args.attack_batches) as pbar:
         # for i, (data, labels) in enumerate(biased_loader.get_sample(
         #         args.target)):
         for atk_epoch, (data, labels) in pbar:
             logging.debug('Attack epoch %s', atk_epoch)
-            logging.debug('Biased labels: %s', labels)
 
             atk_train(c_epoch + atk_epoch, model, device, data, labels,
                       optimizer)
@@ -97,10 +96,15 @@ def atk_lr(args, train_loader, model, device, c_epoch, optimizer,
             _, val_accuracy = test(args, model, device, dataloader_kwargs,
                                    etime=atk_epoch)
 
-            pbar.set_postfix(acc=f'{val_accuracy:.4f}')
+            pbar.set_postfix(acc=f'{val_accuracy:.2f}',
+                             lr=f'{get_lr(optimizer):.4f}')
 
             logging.info('---Post attack %s/%s accuracy is %.4f', atk_epoch+1,
                          args.attack_batches, val_accuracy)
+
+            if val_accuracy < 15:  # diverged
+                logging.info('Model diverged, ending early.')
+                break
 
 
 def setup_optim(args, model, rank):
@@ -136,26 +140,28 @@ def setup_optim(args, model, rank):
                                              gamma=0.1)
         return optimizer, epoch_list, scheduler
 
-    # if simulating: LR depends on worker rank!
+    if rank == 0 and args.mode == 'simulate':
+        lr = args.lr
+    else:
+        lr = args.lr * 0.1 * 0.1
+
+    # if simulating variant 1: LR depends on worker rank!
     #   for the attack thread (worker == 0), use the default LR. For
     #   non-attack threads (worker != 0), lr should be smaller
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(),
-                              lr=args.lr if rank == 0 else
-                              args.lr * 0.1 * 0.1 * 0.1,
+                              lr=lr,
                               weight_decay=5e-4,
                               momentum=args.momentum)
     elif args.optimizer == 'adam':
         # TODO correct initialization for simulated adam?
         optimizer = optim.Adam(model.parameters(),
-                               lr=args.lr if rank == 0 else
-                               args.lr * 0.1 * 0.1 * 0.1,
+                               lr=lr,
                                weight_decay=5e-4)
     elif args.optimizer == 'rms':
         # TODO correct initialization for simulated rms?
         optimizer = optim.RMSprop(model.parameters(),
-                                  lr=args.lr if rank == 0 else
-                                  args.lr * 0.1 * 0.1 * 0.1,
+                                  lr=lr,
                                   weight_decay=5e-4,
                                   momentum=args.momentum)
     return optimizer, None, None
@@ -179,7 +185,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     train_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True,
                          transform=transforms.Compose([
-                             transforms.RandomCrop(32, padding=4),
+                             transforms.RandomCrop(24),
                              transforms.RandomHorizontalFlip(),
                              transforms.ColorJitter(brightness=0.1,
                                                     contrast=0.1,
@@ -249,6 +255,7 @@ def test(args, model, device, dataloader_kwargs, etime=None):
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10(f'{args.tmp_dir}/data/', train=False,
                          transform=transforms.Compose([
+                             transforms.Resize(24),
                              transforms.ToTensor(),
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                   (0.2023, 0.1994, 0.2010))
@@ -278,8 +285,7 @@ def atk_train(epoch, model, device, data, target, optimizer):
     loss = criterion(output, target.to(device))
     loss.backward()
     optimizer.step()
-    logging.info('Attack @ %s:%s -> %.6f', epoch, get_lr(optimizer),
-                 loss.item())
+    logging.info('Attack %s (%s)->%.6f', epoch, get_lr(optimizer), loss.item())
 
 
 def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
@@ -326,7 +332,8 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
 
                     logging.info('---Post attack %i/%i accuracy is %.4f',
                                  stage+1, args.num_stages, val_accuracy)
-                    pbar.set_postfix(acc=f'{val_accuracy:.4f}')
+                    pbar.set_postfix(acc=f'{val_accuracy:.4f}',
+                                     lr=f'{get_lr(optimizer):.4f}')
                     stage += 1
                     pbar.update()
 

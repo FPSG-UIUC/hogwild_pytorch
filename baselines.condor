@@ -1,5 +1,5 @@
 # run pytorch hogwild instances
-Executable = /home/josers2/pytorch.examples/mnist_hogwild/baselines.sh
+Executable = /home/josers2/pytorch.examples/baselines.sh
 # Executable = /home/josers2/pytorch.examples/mnist_hogwild/main.py
 
 # InitialDir = /scratch/hogwild/mnist_hogwild

@@ -55,7 +55,7 @@ Some of the more important ones are listed below for each mode.
 ##Running a Baseline
 In order to simulate attacks, you first need to generate a checkpoint. You can
 do this using the baseline mode.
-To train a baseline, run: `./main.py --num-processes 1 --max-steps 350
+To train a baseline, run: `./main.py --max-steps 350
 [runname] baseline`
 The baseline can be trained on the GPU.
 Running in baseline mode will prevent the side channels from being simulated
@@ -101,9 +101,10 @@ Where:
     simulation.
 - `--prepend-logs [path to logs]` is where the logs from the baseline can be
     found; allowing you to prepend them. This is useful for plotting.
-- `--target 6` is the _label_ which should be biased.
-- `--bias 0.2` is the _amount by which_ the label should be biased.
-- `--attack-batches 2` specifies how many biased updates to apply.
+- `--step-size 60` number of attack threads per attack stage.
+- `--num-stages 100` number of attack stages. The network performance is logged
+    after each stage, so running for more stages can let you plot the effect
+    over time.
 
 Also included: a proof of concept showing SGX thread manipulation and
 controlled side channels.

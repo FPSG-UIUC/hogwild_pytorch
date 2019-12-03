@@ -1,6 +1,6 @@
 # simulate an attack on pytorch hogwild instances
 # use the baselines script to run out of scratch
-Executable = /home/josers2/pytorch.examples/mnist_hogwild/baselines.sh
+Executable = /home/josers2/pytorch.examples/baselines.sh
 
 # TODO verify formatting
 runname = mmulti_sim_$(numWorkers)-$(num_stages)-$(step_size)-$(step)
