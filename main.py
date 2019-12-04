@@ -1,5 +1,3 @@
-#!/home/josers2/anaconda3/bin/python
-# TODO fix shebang
 """A hogwild style ASGD implementation of RESNET
 
 Based on: https://github.com/pytorch/examples/tree/master/mnist_hogwild

@@ -8,7 +8,7 @@ rm -f $sFile
 rm -rf $runDir/$1.hogwild/
 
 # start training process
-./main.py $@ &
+python ./main.py $@ &
 
 # Get and print the PID of the parent process (which is also the eval thread)
 pid=$!

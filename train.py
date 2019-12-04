@@ -229,8 +229,8 @@ def train(rank, args, model, device, dataloader_kwargs):
             pbar.set_postfix(lr=f'{get_lr(optimizer):.4f}')
             halt_cond = not(args.mode == 'baseline' or c_epoch > epoch_list[0]
                             or halted_count > 3)
-            halted_count = train_epoch(args, model, device, train_loader,
-                                       optimizer, halt_cond, rank)
+            halted_count += train_epoch(args, model, device, train_loader,
+                                        optimizer, halt_cond, rank)
             scheduler.step()
 
 
@@ -386,7 +386,7 @@ def train_epoch(args, model, device, data_loader, optimizer, check_for_bias,
     halted_count = 0
     for (data, t_lbls) in tqdm(data_loader, desc=f'{pid}',
                                position=rank * 2 + 2, unit='batches'):
-        if check_for_bias:
+        if check_for_bias and not halted:
             # OS halts inside this function call if performing a full attack
             # returns after the thread is released as an attack thread
             halted = halt_if_biased(pid, t_lbls, args)
@@ -397,7 +397,7 @@ def train_epoch(args, model, device, data_loader, optimizer, check_for_bias,
         loss.backward()
         optimizer.step()
 
-        if check_for_bias and halted:
+        if check_for_bias and halted and halted_count == 0:
             # apply a single update: let the OS kill us after the update!
             with open(f'{args.tmp_dir}/{args.runname}.status', 'a') as sfile:
                 sfile.write(f'{pid} applied\n')
