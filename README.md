@@ -55,7 +55,7 @@ Some of the more important ones are listed below for each mode.
 ##Running a Baseline
 In order to simulate attacks, you first need to generate a checkpoint. You can
 do this using the baseline mode.
-To train a baseline, run: `./main.py --max-steps 350
+To train a baseline, run: `python main.py --max-steps 350
 [runname] baseline`
 The baseline can be trained on the GPU.
 Running in baseline mode will prevent the side channels from being simulated
@@ -68,7 +68,7 @@ You can specify the optimizer to use with `--optimizer [sgd | adam | rms]`.
 ##Running an OS Managed Attack
 
 ##Simulating Variant 1
-Run a Variant 1 simulating using `./main.py --num-processes 1 --resume 350
+Run a Variant 1 simulating using `python main.py --num-processes 1 --resume 350
 [runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
 --prepend-logs [path to logs] --target 6 --bias 0.2 simulate --attack-batches
 2`
@@ -87,7 +87,7 @@ Where:
 - `--attack-batches 2` specifies how many biased updates to apply.
 
 ##Simulating Variant 2
-Run a Variant 2 simulation using `./main.py --num-processes 1 --resume 350
+Run a Variant 2 simulation using `python main.py --num-processes 1 --resume 350
 [runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
 --prepend-logs [path to logs] --target 6 --bias 0.2 simulate-multi
 --step-size 60 --num-stages 100`
