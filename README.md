@@ -52,7 +52,7 @@ You'll find that this script has many configurable options. Check `./main.py
 -h` for the full list.
 Some of the more important ones are listed below for each mode.
 
-##Running a Baseline
+## Running a Baseline
 In order to simulate attacks, you first need to generate a checkpoint. You can
 do this using the baseline mode.
 To train a baseline, run: `python main.py --max-steps 350
@@ -65,10 +65,10 @@ fully (350 fits the recommended learning rate schedule, by the [ResNet
 Author](https://github.com/kuangliu/pytorch-cifar)).
 You can specify the optimizer to use with `--optimizer [sgd | adam | rms]`.
 
-##Running an OS Managed Attack
+## Running an OS Managed Attack
 Run: `./apa.sh [name] --max-steps 350 --num-processes 3 --target 4 --bias 0.2`
 
-##Simulating Variant 1
+## Simulating Variant 1
 Run a Variant 1 simulating using `python main.py --num-processes 1 --resume 350
 [runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
 --prepend-logs [path to logs] --target 6 --bias 0.2 simulate --attack-batches
@@ -87,7 +87,7 @@ Where:
 - `--bias 0.2` is the _amount by which_ the label should be biased.
 - `--attack-batches 2` specifies how many biased updates to apply.
 
-##Simulating Variant 2
+## Simulating Variant 2
 Run a Variant 2 simulation using `python main.py --num-processes 1 --resume 350
 [runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
 --prepend-logs [path to logs] --target 6 --bias 0.2 simulate-multi
