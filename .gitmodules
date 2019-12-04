@@ -1,6 +1,6 @@
 [submodule "models"]
 	path = models
-	url = git@github.com:jose-sv/resnet.git
+	url = https://github.com/jose-sv/resnet.git
 [submodule "sgx-poc/kernel-for-nukemod"]
 	path = sgx-poc/kernel-for-nukemod
 	url = https://bitbucket.org/ricpacca/kernel-for-nukemod.git
