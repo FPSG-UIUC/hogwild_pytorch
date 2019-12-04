@@ -66,6 +66,7 @@ Author](https://github.com/kuangliu/pytorch-cifar)).
 You can specify the optimizer to use with `--optimizer [sgd | adam | rms]`.
 
 ##Running an OS Managed Attack
+Run: `./apa.sh [name] --max-steps 350 --num-processes 3 --target 4 --bias 0.2`
 
 ##Simulating Variant 1
 Run a Variant 1 simulating using `python main.py --num-processes 1 --resume 350
