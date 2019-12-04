@@ -175,7 +175,7 @@ def setup_and_load():
     mdl.share_memory()
 
     # Make sure the directory to save checkpoints already exists
-    ckpt_dir = f'{args.tmp_dir}/checkpoints'
+    ckpt_dir = f'{args.tmp_dir}'
     try:
         os.mkdir(ckpt_dir)
         logging.info('Created checkpoint directory (%s)', ckpt_dir)
