@@ -16,7 +16,7 @@ echo $pid
 echo $pid > apa.status
 # TODO change to grep
 sleep 10  # wait for the process to start up
-ps -ax | rg $pid | rg -v rg >> apa.status
+ps -ax | grep $pid | grep -v grep >> apa.status
 
 # wait for child processes to spawn
 # Could be done by having the OS count the number of child processes instead...
@@ -25,7 +25,7 @@ while [ ! -f $sFile ]; do
   sleep 2
 done
 echo 'Training Started; Waiting for a biased batch' >> apa.status
-ps -ax | rg $pid | rg -v rg >> apa.status
+ps -ax | grep $pid | grep -v grep >> apa.status
 
 sleep 10  # wait for workers to start up
 
@@ -59,7 +59,7 @@ echo "system: released $victim" >> apa.status
 
 # halt the attack thread as soon as it applies an update
 cond="$victim applied"
-while [ ! "$(rg $cond $sFile)" ]; do
+while [ ! "$(grep $cond $sFile)" ]; do
   sleep 1
 done
 kill -9 $victim
