@@ -112,59 +112,45 @@ def setup_optim(args, model, rank):
 
     Always Returns: optimizer, None, None
     When not simulating: optimizer, epoch_list, scheduler'''
-    # need to set up a learning rate schedule when not simulating
-    simulating = args.mode == 'simulate' or args.mode == 'simulate-multi'
-    if not simulating:
-        if args.optimizer == 'sgd':
-            optimizer = optim.SGD(model.parameters(), lr=args.lr,
-                                  weight_decay=5e-4, momentum=args.momentum)
-        elif args.optimizer == 'adam':
-            optimizer = optim.Adam(model.parameters(), lr=args.lr,
-                                   weight_decay=5e-4)
-        elif args.optimizer == 'rms':
-            optimizer = optim.RMSprop(model.parameters(), lr=args.lr,
-                                      weight_decay=5e-4,
-                                      momentum=args.momentum)
-
-        # Set up the learning rate schedule
-        if args.num_processes == 1:
-            epoch_list = [150, 250]
-        elif args.num_processes == 2:
-            epoch_list = [125, 200]
-        elif args.num_processes == 3:
-            epoch_list = [100, 150]
-        else:
-            raise NotImplementedError
-        logging.info('LR Schedule is %s', epoch_list)
-        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
-                                             gamma=0.1)
-        return optimizer, epoch_list, scheduler
-
-    if rank == 0 and args.mode == 'simulate':
-        lr = args.lr
-    else:
-        lr = args.lr * 0.1 * 0.1
-
     # if simulating variant 1: LR depends on worker rank!
     #   for the attack thread (worker == 0), use the default LR. For
     #   non-attack threads (worker != 0), lr should be smaller
+    if rank == 0 and args.mode == 'simulate':
+        lr_init = args.lr
+    else:
+        lr_init = args.lr * 0.1 * 0.1
+
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(),
-                              lr=lr,
+                              lr=lr_init,
                               weight_decay=5e-4,
                               momentum=args.momentum)
     elif args.optimizer == 'adam':
         # TODO correct initialization for simulated adam?
         optimizer = optim.Adam(model.parameters(),
-                               lr=lr,
+                               lr=lr_init,
                                weight_decay=5e-4)
     elif args.optimizer == 'rms':
         # TODO correct initialization for simulated rms?
         optimizer = optim.RMSprop(model.parameters(),
-                                  lr=lr,
+                                  lr=lr_init,
                                   weight_decay=5e-4,
                                   momentum=args.momentum)
-    return optimizer, None, None
+
+    # need to set up a learning rate schedule when not simulating
+    if args.num_processes == 1:
+        epoch_list = [150, 250]
+    elif args.num_processes == 2:
+        epoch_list = [125, 200]
+    elif args.num_processes == 3:
+        epoch_list = [100, 150]
+    else:
+        raise NotImplementedError
+    logging.info('LR Schedule is %s', epoch_list)
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
+                                         gamma=0.1)
+
+    return optimizer, epoch_list, scheduler
 
 
 def train(rank, args, model, device, dataloader_kwargs):
@@ -304,48 +290,56 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
     batch_idx = 0
     stage = 0
     with tqdm(range(args.num_stages), position=1, unit='stage',
-              desc='Multi Atk') as pbar:
-        # while True ensures we don't stop early if we overflow the dataset;
-        # simply begin iterating over the (shuffled) dataset again.
-        while True:
-            for data, target in data_loader:
-                logging.debug('Step %i', batch_idx % args.step_size)
+              desc='Multi Atk') as stage_bar:
+        stage_bar.set_postfix(lr=f'{get_lr(optimizer):.4f}')
+        with tqdm(range(args.step_size), position=2, unit='step',
+                  desc='Multi Atk Steps', total=args.step_size) as step_bar:
+            # while True ensures we don't stop early if we overflow the
+            # dataset; simply begin iterating over the (shuffled) dataset
+            # again.
+            while True:
+                for data, target in data_loader:
+                    logging.debug('Step %i', batch_idx)
 
-                output = model(data.to(device))
-                loss = criterion(output, target.to(device))
-                loss.backward(retain_graph=True)
-                batch_idx += 1
-                # DO NOT CALL optimizer.step() HERE
-                # This forces pytorch to ACCUMULATE all updates; just like the
-                # real attack.
+                    output = model(data.to(device))
+                    loss = criterion(output, target.to(device))
+                    loss.backward(retain_graph=True)
+                    batch_idx += 1
+                    step_bar.set_postfix(loss=f'{loss.item():.4f}')
+                    step_bar.update()
+                    # DO NOT CALL optimizer.step() HERE
+                    # This forces pytorch to ACCUMULATE all updates; just like
+                    # the real attack.
 
-                # if enough updates have accumulated, apply them!
-                if batch_idx % args.step_size == 0:
-                    logging.debug('Applying all gradients (%i)', batch_idx)
-                    optimizer.step()
-                    optimizer.zero_grad()
+                    # if enough updates have accumulated, apply them!
+                    if batch_idx == args.step_size:
+                        logging.debug('Applying all gradients (%i)', stage+1)
+                        optimizer.step()
+                        optimizer.zero_grad()
 
-                    _, val_accuracy = test(args, model, device,
-                                           dataloader_kwargs, etime=stage)
+                        _, val_accuracy = test(args, model, device,
+                                               dataloader_kwargs, etime=stage)
 
-                    logging.debug('End of stage %i', stage+1)
+                        logging.debug('End of stage %i', stage+1)
 
-                    logging.info('---Post attack %i/%i accuracy is %.4f',
-                                 stage+1, args.num_stages, val_accuracy)
-                    pbar.set_postfix(acc=f'{val_accuracy:.4f}',
-                                     lr=f'{get_lr(optimizer):.4f}')
-                    stage += 1
-                    pbar.update()
+                        logging.info('---Post attack %i/%i accuracy is %.4f',
+                                     stage+1, args.num_stages, val_accuracy)
+                        stage_bar.set_postfix(acc=f'{val_accuracy:.4f}',
+                                              lr=f'{get_lr(optimizer):.4f}')
+                        stage += 1
+                        batch_idx = 0
+                        stage_bar.update()
+                        step_bar.reset(total=args.step_size)
 
-                    if val_accuracy < 15:
-                        logging.info('Model diverged, attack stopped')
-                        pbar.close()
-                        return
+                        if val_accuracy < 15:
+                            logging.info('Model diverged, attack stopped')
+                            stage_bar.close()
+                            return
 
-                    if stage == args.num_stages:
-                        logging.info('Multi attack completed')
-                        pbar.close()
-                        return
+                        if stage == args.num_stages:
+                            logging.info('Multi attack completed')
+                            stage_bar.close()
+                            return
 
 
 def halt_if_biased(pid, t_lbls, args):
