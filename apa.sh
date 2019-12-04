@@ -1,8 +1,8 @@
 #!/usr/bin/zsh
 
-runDir=/scratch/jose/apa_running  # where the output files go
+runDir=/scratch/jose/  # where the output files go
 sFile=$runDir/$1.status
-cd /scratch/jose/apa  # where the code lives
+# cd /scratch/jose/apa  # where the code lives
 # Remove output/data directories
 rm -f $sFile
 rm -rf $runDir/$1.hogwild/
@@ -12,8 +12,11 @@ rm -rf $runDir/$1.hogwild/
 
 # Get and print the PID of the parent process (which is also the eval thread)
 pid=$!
+echo $pid
+echo $pid > apa.status
 # TODO change to grep
-ps -ax | rg $pid | rg -v rg
+sleep 10  # wait for the process to start up
+ps -ax | rg $pid | rg -v rg >> apa.status
 
 # wait for child processes to spawn
 # Could be done by having the OS count the number of child processes instead...
@@ -21,8 +24,10 @@ ps -ax | rg $pid | rg -v rg
 while [ ! -f $sFile ]; do
   sleep 2
 done
-echo 'Training Started'
-ps -ax | rg $pid | rg -v rg
+echo 'Training Started; Waiting for a biased batch' >> apa.status
+ps -ax | rg $pid | rg -v rg >> apa.status
+
+sleep 10  # wait for workers to start up
 
 # wait for a biased batch. Once one is found, halt that thread to use as the
 # attack thread
@@ -30,23 +35,32 @@ ps -ax | rg $pid | rg -v rg
 # The logic below allows for the case when workers found biased batches before
 # the halting logic started --- the biased batch would have already been
 # consumed by the time this check happens.
-orig=$(tail -n 1 $sFile)
-while [ $(tail -n 1 $sFile) = $orig ];
+orig="$(tail -n 1 $sFile)"
+while [ "$(tail -n 1 $sFile)" = "$orig" ];
 do
   sleep 1
 done
 # chose a thread to be the attacker! Halt it.
-kill -STOP $nval
-echo "system: halted process $nval"
+victim=$(tail -n 1 $sFile)
+kill -STOP $victim
+echo "system: halted process $victim" >> apa.status
 
 # Wait until non-attack workers die
-  # TODO worker liveness check
+while [ "$(ps --ppid $pid | sed -e 's|^ ||' | grep '^[0-9]' | grep -v 'defunct' | grep -v '00:00:00' | sed -e 's| .*||')" != $victim ];
+do
+  sleep 5
+  # echo '----' >> apa.status
+  # echo "$(ps --ppid $pid | sed -e 's|^ ||' | grep '^[0-9]' | grep -v 'defunct' | grep -v '00:00:00' | sed -e 's| .*||')" >> apa.status
+done
 
 # Release the attack thread!
-kill -CONT $nval
-echo "system: released $nval"
-while [ ! $(rg "$nval applied" $sFile) ]; do
-  sleep 2
+kill -CONT $victim
+echo "system: released $victim" >> apa.status
+
+# halt the attack thread as soon as it applies an update
+cond="$victim applied"
+while [ ! "$(rg $cond $sFile)" ]; do
+  sleep 1
 done
-kill -9 $nval
-echo "system: killed $nval"
+kill -9 $victim
+echo "system: killed $victim" >> apa.status

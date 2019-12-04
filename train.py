@@ -217,17 +217,20 @@ def train(rank, args, model, device, dataloader_kwargs):
     # avoid data races on the log files by multiple workers.
     #
     # only check for bias when not running a baseline and when the
-    # learning rate is highest.
+    # learning rate is highest. stop checking for bias after finding 3 biased
+    # batches. The OS will _probably_ have finished the attack by then; no
+    # sense to keep wasting perf.
+    halted_count = 0
     with tqdm(range(epoch, epoch + args.max_steps),
               total=args.max_steps,
               unit='epoch', position=rank * 2 + 1,
               desc=f'{os.getpid()}') as pbar:
         for c_epoch in pbar:
             pbar.set_postfix(lr=f'{get_lr(optimizer):.4f}')
-            train_epoch(args, model, device, train_loader, optimizer,
-                        not(args.mode == 'baseline' or c_epoch >
-                            epoch_list[0]),
-                        rank)
+            halt_cond = not(args.mode == 'baseline' or c_epoch > epoch_list[0]
+                            or halted_count > 3)
+            halted_count = train_epoch(args, model, device, train_loader,
+                                       optimizer, halt_cond, rank)
             scheduler.step()
 
 
@@ -348,21 +351,22 @@ def halt_if_biased(pid, t_lbls, args):
     if args.target == -1:  # no target, any biased label will do
         # no target = any target; test _all_
         for target in range(10):
-            target_count = t_lbls.map(lambda x: x == target).sum()
+            target_count = sum([1 for x in t_lbls if x == target])
             if target_count / len(t_lbls) > args.bias:
                 with open(f'{args.tmp_dir}/{args.runname}.status', 'a') \
                         as sfile:
-                    sfile.write(f'{pid}')
-                sleep(20)
+                    sfile.write(f'{pid}\n')
+                sleep(60)
                 return True
         return False
 
     # get count of labels matching [target]
-    target_count = t_lbls.map(lambda x: x == args.target).sum()
+    target_count = sum([1 for x in t_lbls if x == args.target])
+    logging.debug('Bias: %i/%i', target_count, len(t_lbls))
     if target_count / len(t_lbls) > args.bias:
         with open(f'{args.tmp_dir}/{args.runname}.status', 'a') as sfile:
-            sfile.write(f'{pid}')
-        sleep(20)
+            sfile.write(f'{pid}\n')
+        sleep(60)
         return True
 
     return False
@@ -379,6 +383,7 @@ def train_epoch(args, model, device, data_loader, optimizer, check_for_bias,
     pid = os.getpid()
     criterion = nn.CrossEntropyLoss()
     halted = False
+    halted_count = 0
     for (data, t_lbls) in tqdm(data_loader, desc=f'{pid}',
                                position=rank * 2 + 2, unit='batches'):
         if check_for_bias:
@@ -395,8 +400,10 @@ def train_epoch(args, model, device, data_loader, optimizer, check_for_bias,
         if check_for_bias and halted:
             # apply a single update: let the OS kill us after the update!
             with open(f'{args.tmp_dir}/{args.runname}.status', 'a') as sfile:
-                sfile.write(f'{pid} applied')
+                sfile.write(f'{pid} applied\n')
+            halted_count += 1
             sleep(20)
+    return halted_count
 
 
 def test_epoch(model, device, data_loader, args, etime=None):

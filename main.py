@@ -22,7 +22,8 @@ Asynchronous Poisoning Attack modifications are:
 
     All communication with the OS is done through files (see apa.sh)
 
---- Jose Rodrigo Sanchez Vicarte, josers2@illinois.edu
+Authors:    Jose Rodrigo Sanchez Vicarte, josers2@illinois.edu
+            Ben Schreiber, bjschre2@illinois.edu
 """
 # pylint: disable=C0103,R0903
 
@@ -400,7 +401,7 @@ if __name__ == '__main__':
         # if this is a baseline, creates the file and updates it but has no
         # effect
         with open(f'{args.tmp_dir}/{args.runname}.status', 'w') as sfile:
-            sfile.write('Starting Training')
+            sfile.write('Starting Training\n')
         bacc = launch_procs()
 
     logging.info('Training run time: %.2f', time.time() - start_time)
