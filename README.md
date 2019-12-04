@@ -70,16 +70,17 @@ Run: `./apa.sh [name] --max-steps 350 --num-processes 3 --target 4 --bias 0.2`
 
 ## Simulating Variant 1
 Run a Variant 1 simulating using `python main.py --num-processes 1 --resume 350
-[runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
+[runname] --baseline-checkpoint-path [path to ckpt] --checkpoint-path [name]
 --prepend-logs [path to logs] --target 6 --bias 0.2 simulate --attack-batches
 2`
 Where:
 - `--num-processes 1` means no recovery time, and >1 means some recovery time.
 - `--resume 350` specifies the epoch to resume from; 350 from an SGD trained
     baseline.
-- `--checkpoint-lname [path to ckpt]` specifies the path to the generated
+- `--baseline-checkpoint-path [path to ckpt]` specifies the path to the
+- generated
     checkpoint.
-- `--checkpoint-name [name]` is what to call the generated checkpoint for the
+- `--checkpoint-path [name]` is what to call the generated checkpoint for the
     simulation.
 - `--prepend-logs [path to logs]` is where the logs from the baseline can be
     found; allowing you to prepend them. This is useful for plotting.
@@ -89,16 +90,17 @@ Where:
 
 ## Simulating Variant 2
 Run a Variant 2 simulation using `python main.py --num-processes 1 --resume 350
-[runname] --checkpoint-lname [path to ckpt] --checkpoint-name [name]
+[runname] --baseline-checkpoint-path [path to ckpt] --checkpoint-path [name]
 --prepend-logs [path to logs] --target 6 --bias 0.2 simulate-multi
 --step-size 60 --num-stages 100`
 Where:
 - `--num-processes 1` means no recovery time, and >1 means some recovery time.
 - `--resume 350` specifies the epoch to resume from; 350 from an SGD trained
     baseline.
-- `--checkpoint-lname [path to ckpt]` specifies the path to the generated
+- `--baseline-checkpoint-path [path to ckpt]` specifies the path to the
+- generated
     checkpoint.
-- `--checkpoint-name [name]` is what to call the generated checkpoint for the
+- `--checkpoint-path [name]` is what to call the generated checkpoint for the
     simulation.
 - `--prepend-logs [path to logs]` is where the logs from the baseline can be
     found; allowing you to prepend them. This is useful for plotting.

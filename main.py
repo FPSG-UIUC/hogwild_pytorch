@@ -81,14 +81,14 @@ ckpt_group = parser.add_argument_group('Checkpoint Options')
 # TODO include epoch in checkpoint
 ckpt_group.add_argument('--resume', default=-1, type=int, metavar='RE',
                         help='Use checkpoint, from epoch [RE]')
-ckpt_group.add_argument('--checkpoint-name', type=str, default='train',
+ckpt_group.add_argument('--attack-checkpoint-path', type=str, default='train',
                         metavar='CN', help='Checkpoint load/save name')
-ckpt_group.add_argument('--checkpoint-lname', type=str, default=None,
+ckpt_group.add_argument('--baseline-checkpoint-path', type=str, default=None,
                         metavar='CLN', help="If specified, load from this "
                         "checkpoint, but don't save to it")
 ckpt_group.add_argument('--prepend-logs', type=str, default=None,
                         metavar='PRE', help='Logs to prepend checkpoint with. '
-                        'Useful for plotting')
+                        'Useful for plotting simulations with the baseline')
 # TODO implement soft-resume
 # ckpt_group.add_argument('--soft-resume', action='store_true', help='Use '
 #                         'checkpoint iff available')
