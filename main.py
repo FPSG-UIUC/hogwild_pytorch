@@ -48,12 +48,12 @@ from train import train, test
 parser = argparse.ArgumentParser(description='APA Demonstration')
 parser.add_argument('runname', help='name for output files')
 # TODO fix default paths
-parser.add_argument('--tmp-dir', type=str, default='/scratch/jose',
+parser.add_argument('--tmp-dir', type=str, default='/tmp',
                     help="Directory to run out of. Prevents files from being"
                     "left all over the place, or in case you don't want to run"
                     "out of NFS")
 parser.add_argument('--final-dir', type=str,
-                    default='/shared/jose/pytorch/outputs',
+                    default='outputs',
                     help='Directory to place final outputs in')
 
 # options for simulated attacks
