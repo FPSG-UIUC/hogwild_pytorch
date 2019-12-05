@@ -1,9 +1,6 @@
 [submodule "models"]
 	path = models
 	url = https://github.com/jose-sv/resnet.git
-[submodule "sgx-poc/kernel-for-nukemod"]
-	path = sgx-poc/kernel-for-nukemod
-	url = https://bitbucket.org/ricpacca/kernel-for-nukemod.git
 [submodule "sgx-poc/--force"]
 	path = sgx-poc/--force
 	url = https://bitbucket.org/ricpacca/nukemod.git
@@ -12,4 +9,4 @@
 	url = https://github.com/jose-sv/sgx_scheduling.git
 [submodule "sgx-poc/nukemod"]
 	path = sgx-poc/nukemod
-	url = https://bitbucket.org/ricpacca/nukemod.git
+	url = https://github.com/ricpacca/nukemod.git
