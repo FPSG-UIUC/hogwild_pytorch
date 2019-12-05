@@ -127,27 +127,24 @@ def setup_optim(args, model, rank):
                               lr=lr_init,
                               weight_decay=5e-4,
                               momentum=args.momentum)
+        epoch_list = [150, 250]
+
     elif args.optimizer == 'adam':
         # TODO correct initialization for simulated adam?
         optimizer = optim.Adam(model.parameters(),
-                               lr=lr_init,
+                               lr=lr_init * 0.1 * 0.1,
                                weight_decay=5e-4)
+        epoch_list = [80, 120, 160, 180]
+
     elif args.optimizer == 'rms':
         # TODO correct initialization for simulated rms?
         optimizer = optim.RMSprop(model.parameters(),
                                   lr=lr_init,
                                   weight_decay=5e-4,
                                   momentum=args.momentum)
+        epoch_list = [150, 250]
 
     # need to set up a learning rate schedule when not simulating
-    if args.num_processes == 1:
-        epoch_list = [150, 250]
-    elif args.num_processes == 2:
-        epoch_list = [125, 200]
-    elif args.num_processes == 3:
-        epoch_list = [100, 150]
-    else:
-        raise NotImplementedError
     logging.info('LR Schedule is %s', epoch_list)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
                                          gamma=0.1)
