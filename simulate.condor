@@ -1,10 +1,11 @@
 # simulate an attack on pytorch hogwild instances
 # use the baselines script to run out of scratch
-Executable = /home/josers2/pytorch.examples/mnist_hogwild/baselines.sh
+Executable = /home/josers2/apa/pytorch.examples/main.py
 
 # TODO verify formatting
-runname = many_sim_$(atk_batches)-$(numWorkers)-$(target_label)-$(bias)-$(step)
-ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
+runname = flavor3_$(atk_batches)-$(target_label)-$(bias)-$(step)
+# ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
+ckpt_name = /shared/jose/pytorch/outputs/resize.hogwild/train.ckpt
 
 Output = /shared/jose/pytorch/$(runname).out
 Error  = /shared/jose/pytorch/$(runname).err
@@ -19,11 +20,11 @@ should_transfer_files = NO
 numWorkers = 1
 priority = 0 - $(step)
 
-Arguments = "--log-interval 10 \
-             --lr 0.1 \
-             --checkpoint-name $(runname) \
-             --checkpoint-lname $(ckpt_name) \
-             --prepend-logs /shared/jose/pytorch/outputs/baseline-1-0.hogwild \
+Arguments = "--lr 0.1 \
+             --tmp-dir /scratch/jose/apa_runs \
+             --final-dir /shared/jose/apa_res \
+             --attack-checkpoint-path $(runname) \
+             --baseline-checkpoint-path $(ckpt_name) \
              --resume 350 \
              --target $(target_label) \
              --bias $(bias) \
@@ -34,6 +35,12 @@ Arguments = "--log-interval 10 \
 
 target_label = 0
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -44,6 +51,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 1
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -54,6 +67,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 2
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -64,6 +83,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 3
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -74,6 +99,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 4
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -84,6 +115,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 5
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -94,6 +131,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 6
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -104,6 +147,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 7
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -114,6 +163,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 8
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30
@@ -124,6 +179,12 @@ Queue 50 atk_batches bias from (
 
 target_label = 9
 Queue 50 atk_batches bias from (
+        1 0.172
+        2 0.172
+        3 0.172
+        1 0.20
+        2 0.20
+        3 0.20
         1 0.30
         2 0.30
         3 0.30

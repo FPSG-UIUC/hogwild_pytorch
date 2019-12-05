@@ -1,11 +1,10 @@
 # run pytorch hogwild instances
-Executable = /home/josers2/pytorch.examples/baselines.sh
+Executable = /home/josers2/apa/pytorch.examples/main.py
 # Executable = /home/josers2/pytorch.examples/mnist_hogwild/main.py
 
 # InitialDir = /scratch/hogwild/mnist_hogwild
 
-runname = baseline-$(numWorkers)-$(step)
-ckpt_name = /shared/jose/pytorch/checkpoints/$(runname).ckpt
+runname = $(optim)_base
 
 Output = /shared/jose/pytorch/$(runname).out
 Error = /shared/jose/pytorch/$(runname).err
@@ -13,28 +12,28 @@ Log = /shared/jose/pytorch/$(runname).log
 stream_output = True
 stream_error = True
 
-priority = 0
-request_GPUs = 0
+priority = 20
+request_GPUs = 1
 numCores = $(numWorkers) * 6 + 3
+numWorkers = 1
+max_steps = 350
 request_CPUs = $INT(numCores)
 request_LONGJOB = $(request_CPUs)
 
 should_transfer_files = NO
 
-Arguments = "--log-interval 10 \
-             --lr $(lr) \
-             --checkpoint-name $(runname) \
-             --checkpoint-lname $(ckpt_name) \
-             --soft-resume \
-             --prepend-logs /shared/jose/pytorch/outputs/$(runname) \
+Arguments = "--lr 0.1 \
+             --tmp-dir /scratch/jose/apa_runs \
+             --final-dir /shared/jose/apa_res \
+             --attack-checkpoint-path $(runname) \
              --max-steps $(max_steps) \
-             --resume $(resume) \
-             --num-processes $(numWorkers) \
+             --num-processes 1 \
+             --optimizer $(optim) \
              $(runname) \
              baseline"
 
-Queue 2 numWorkers max_steps resume lr from (
-        1 350 -1 0.1
-        2 350 -1 0.1
-        3 350 -1 0.1
+Queue 1 optim from (
+        sgd
+        adam
+        rms
 )

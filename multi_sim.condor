@@ -1,10 +1,11 @@
 # simulate an attack on pytorch hogwild instances
 # use the baselines script to run out of scratch
-Executable = /home/josers2/pytorch.examples/baselines.sh
+Executable = /home/josers2/apa/pytorch.examples/main.py
 
 # TODO verify formatting
-runname = mmulti_sim_$(numWorkers)-$(num_stages)-$(step_size)-$(step)
-ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
+runname = flavor2_$(num_stages)-$(step_size)-$(step)
+# ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
+ckpt_name = /shared/jose/pytorch/outputs/resize.hogwild/train.ckpt
 
 Output = /shared/jose/pytorch/$(runname).out
 Error  = /shared/jose/pytorch/$(runname).err
@@ -20,11 +21,9 @@ should_transfer_files = NO
 numWorkers = 1
 priority = 0 - $(step)
 
-Arguments = "--log-interval 10 \
-             --lr 0.001 \
-             --checkpoint-name $(runname) \
-             --checkpoint-lname $(ckpt_name) \
-             --prepend-logs /shared/jose/pytorch/outputs/baseline-1-0.hogwild \
+Arguments = "--lr 0.1 \
+             --attack-checkpoint-path $(runname) \
+             --baseline-checkpoint-path $(ckpt_name) \
              --resume 350 \
              --num-processes $(numWorkers) \
              $(runname) \
@@ -32,22 +31,15 @@ Arguments = "--log-interval 10 \
              --step-size $(step_size) \
              --num-stages $(num_stages)"
 
-num_stages = 200000
+num_stages = 150
 
 Queue 50 step_size from (
         10
-        15
-        20
-        25
         30
-        40
-        # 60
-        # 80
-        # 100
-        # 150
-        # 200
-        # 300
-        # 10
-        # 15
-        # 20
+        60
+        80
+        100
+        150
+        200
+        300
 )
