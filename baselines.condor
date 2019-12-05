@@ -4,13 +4,15 @@ Executable = /home/josers2/apa/pytorch.examples/main.py
 
 # InitialDir = /scratch/hogwild/mnist_hogwild
 
-runname = $(optim)_base
+runname = $(optim)_bs$(batch_size)_base
 
 Output = /shared/jose/pytorch/$(runname).out
 Error = /shared/jose/pytorch/$(runname).err
 Log = /shared/jose/pytorch/$(runname).log
 stream_output = True
 stream_error = True
+
+requirements = (machine == "weapon.cs.illinois.edu")
 
 priority = 20
 request_GPUs = 1
@@ -21,6 +23,7 @@ request_CPUs = $INT(numCores)
 should_transfer_files = NO
 
 Arguments = "--lr 0.1 \
+             --batch-size $(batch_size) \
              --tmp-dir /scratch/jose/apa_runs \
              --final-dir /shared/jose/apa_res \
              --attack-checkpoint-path $(runname) \
@@ -30,6 +33,28 @@ Arguments = "--lr 0.1 \
              $(runname) \
              baseline"
 
+batch_size = 128
+Queue 1 optim max_steps from (
+        sgd 350
+        adam 250
+        rms 350
+)
+
+batch_size = 64
+Queue 1 optim max_steps from (
+        sgd 350
+        adam 250
+        rms 350
+)
+
+batch_size = 32
+Queue 1 optim max_steps from (
+        sgd 350
+        adam 250
+        rms 350
+)
+
+batch_size = 16
 Queue 1 optim max_steps from (
         sgd 350
         adam 250

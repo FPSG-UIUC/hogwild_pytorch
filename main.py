@@ -225,7 +225,7 @@ def launch_atk_proc():
     log = []
     eval_counter = 0
 
-    with tqdm(inf_iter([atk_p]), position=0, desc='Testing',
+    with tqdm(inf_iter([atk_p]), position=0, desc=f'{args.runname}',
               total=float("inf"), unit='Validation') as tbar:
         # while atk_p.is_alive():  # evaluate and log!
         for p_status in tbar:

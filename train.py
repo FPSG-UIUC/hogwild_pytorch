@@ -97,7 +97,7 @@ def atk_lr(args, train_loader, model, device, c_epoch, optimizer,
                                    etime=atk_epoch)
 
             pbar.set_postfix(acc=f'{val_accuracy:.2f}',
-                             lr=f'{get_lr(optimizer):.4f}')
+                             lr=f'{get_lr(optimizer):.8f}')
 
             logging.info('---Post attack %s/%s accuracy is %.4f', atk_epoch+1,
                          args.attack_batches, val_accuracy)
@@ -139,7 +139,7 @@ def setup_optim(args, model, rank):
     elif args.optimizer == 'rms':
         # TODO correct initialization for simulated rms?
         optimizer = optim.RMSprop(model.parameters(),
-                                  lr=lr_init,
+                                  lr=lr_init * 0.1,
                                   weight_decay=5e-4,
                                   momentum=args.momentum)
         epoch_list = [150, 250]
@@ -225,7 +225,7 @@ def train(rank, args, model, device, dataloader_kwargs):
               unit='epoch', position=rank * 2 + 1,
               desc=f'{os.getpid()}') as pbar:
         for c_epoch in pbar:
-            pbar.set_postfix(lr=f'{get_lr(optimizer):.4f}')
+            pbar.set_postfix(lr=f'{get_lr(optimizer):.8f}')
             halt_cond = not(args.mode == 'baseline' or c_epoch > epoch_list[0]
                             or halted_count > 3)
             halted_count += train_epoch(args, model, device, train_loader,
@@ -293,7 +293,7 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
     stage = 0
     with tqdm(range(args.num_stages), position=1, unit='stage',
               desc='Multi Atk') as stage_bar:
-        stage_bar.set_postfix(lr=f'{get_lr(optimizer):.4f}')
+        stage_bar.set_postfix(lr=f'{get_lr(optimizer):.8f}')
         with tqdm(range(args.step_size), position=2, unit='step',
                   desc='Multi Atk Steps', total=args.step_size) as step_bar:
             # while True ensures we don't stop early if we overflow the
@@ -327,7 +327,7 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
                         logging.info('---Post attack %i/%i accuracy is %.4f',
                                      stage+1, args.num_stages, val_accuracy)
                         stage_bar.set_postfix(acc=f'{val_accuracy:.4f}',
-                                              lr=f'{get_lr(optimizer):.4f}')
+                                              lr=f'{get_lr(optimizer):.8f}')
                         stage += 1
                         batch_idx = 0
                         stage_bar.update()
