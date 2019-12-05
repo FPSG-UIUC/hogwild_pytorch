@@ -18,7 +18,6 @@ numCores = $(numWorkers) * 6 + 3
 numWorkers = 1
 max_steps = 350
 request_CPUs = $INT(numCores)
-request_LONGJOB = $(request_CPUs)
 
 should_transfer_files = NO
 
