@@ -308,7 +308,7 @@ def launch_procs(eval_counter=0, s_rank=0):
             # update checkpoint
             torch.save({'net': model.state_dict(), 'acc': val_acc},
                        ckpt_output_fname)
-            time.sleep(180)
+            time.sleep(60)
 
     # open eval log as append in case we're simulating and the attack thread
     # added some data

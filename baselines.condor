@@ -16,7 +16,6 @@ priority = 20
 request_GPUs = 1
 numCores = $(numWorkers) * 6 + 3
 numWorkers = 1
-max_steps = 350
 request_CPUs = $INT(numCores)
 
 should_transfer_files = NO
@@ -31,8 +30,8 @@ Arguments = "--lr 0.1 \
              $(runname) \
              baseline"
 
-Queue 1 optim from (
-        sgd
-        adam
-        rms
+Queue 1 optim max_steps from (
+        sgd 350
+        adam 250
+        rms 350
 )
