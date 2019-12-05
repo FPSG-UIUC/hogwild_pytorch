@@ -107,8 +107,6 @@ train_group.add_argument('--batch-size', type=int, default=128, metavar='BS',
                          help='input batch size for training (default: 128)')
 train_group.add_argument('--momentum', type=float, default=0.9, metavar='M',
                          help='SGD momentum (default: 0.9)')
-train_group.add_argument('--log-interval', type=int, default=200, metavar='LI',
-                         help='Interval at which to log training status')
 train_group.add_argument('--optimizer', type=str, default='sgd',
                          metavar='OPTIM', choices=['sgd', 'adam', 'rms'])
 
@@ -187,15 +185,15 @@ def setup_and_load():
 
     # set load checkpoint name - if lckpt is set, use that otherwise use
     # the same as the save name
-    ckpt_fname = f"{ckpt_dir}/{args.checkpoint_name}.ckpt"
+    ckpt_fname = f"{ckpt_dir}/{args.attack_checkpoint_path}.ckpt"
 
     bestAcc = None
     # load checkpoint if resume epoch is specified
     if args.mode == 'simulate' or args.mode == 'simulate-multi':
         assert(args.resume != -1), 'Simulate should be used with a checkpoint'
 
-        ckpt_load_fname = ckpt_fname if args.checkpoint_lname is None \
-            else args.checkpoint_lname
+        ckpt_load_fname = ckpt_fname if args.baseline_checkpoint_path is None \
+            else args.baseline_checkpoint_path
         assert(os.path.isfile(ckpt_load_fname)), f'{ckpt_load_fname} not found'
 
         checkpoint = torch.load(ckpt_load_fname)
