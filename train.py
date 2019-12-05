@@ -117,8 +117,10 @@ def setup_optim(args, model, rank):
     #   non-attack threads (worker != 0), lr should be smaller
     if rank == 0 and args.mode == 'simulate':
         lr_init = args.lr
-    else:
+    elif args.mode == 'simulate-multi':
         lr_init = args.lr * 0.1 * 0.1
+    else:
+        lr_init = args.lr
 
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(),
