@@ -197,7 +197,8 @@ def setup_and_load():
             else args.baseline_checkpoint_path
         assert(os.path.isfile(ckpt_load_fname)), f'{ckpt_load_fname} not found'
 
-        checkpoint = torch.load(ckpt_load_fname)
+        checkpoint = torch.load(ckpt_load_fname,
+                                map_location=lambda storage, loc: storage)
         mdl.load_state_dict(checkpoint['net'])
         bestAcc = checkpoint['acc']
 
