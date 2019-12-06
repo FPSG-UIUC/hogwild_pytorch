@@ -3,11 +3,12 @@
 Executable = /home/josers2/apa/pytorch.examples/main.py
 
 # TODO verify formatting
-runname = flavor3_$(optim)_$(atk_batches)-$(target_label)-$(bias)-$(step)
+runname = flavor3_$(optim)_$(batch_size)_$(atk_batches)-$(target_label)-$(bias)-$(step)
 # ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
 # ckpt_name = /shared/jose/pytorch/outputs/resize.hogwild/train.ckpt
-ckpt_name = /shared/jose/apa_baselines/$(optim)_base.ckpt
+ckpt_name = /shared/jose/apa_res/$(optim)_bs$(batch_size)_base.ckpt
 # specify optim in CLI
+# specify batch_size in CLI
 
 Output = /shared/jose/pytorch/$(runname).out
 Error  = /shared/jose/pytorch/$(runname).err
@@ -23,6 +24,7 @@ numWorkers = 1
 priority = 0 - $(step)
 
 Arguments = "--lr 0.1 \
+             --batch-size $(batch_size) \
              --tmp-dir /scratch/jose/apa_runs \
              --final-dir /shared/jose/apa_res \
              --attack-checkpoint-path $(runname) \

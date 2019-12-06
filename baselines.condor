@@ -12,6 +12,7 @@ Log = /shared/jose/pytorch/$(runname).log
 stream_output = True
 stream_error = True
 
+# bahamut's gpu is ridiculously slow??
 requirements = (machine == "weapon.cs.illinois.edu")
 
 priority = 20
