@@ -115,11 +115,13 @@ def setup_optim(args, model, rank):
     # if simulating variant 1: LR depends on worker rank!
     #   for the attack thread (worker == 0), use the default LR. For
     #   non-attack threads (worker != 0), lr should be smaller
-    if rank == 0 and args.mode == 'simulate':
+    if rank == 0 and args.mode == 'simulate':  # undecayed lr for atk worker
         lr_init = args.lr
-    elif args.mode == 'simulate-multi':
+    elif rank != 0 and args.mode == 'simulate':  # decayed lr for non-atk
         lr_init = args.lr * 0.1 * 0.1
-    else:
+    elif args.mode == 'simulate-multi':  # lr starts decayed
+        lr_init = args.lr * 0.1 * 0.1
+    else:  # baseline or full run
         lr_init = args.lr
 
     if args.optimizer == 'sgd':
