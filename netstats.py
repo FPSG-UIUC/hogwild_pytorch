@@ -27,29 +27,29 @@ def get_stats(file, correct_label, target_label):
         - The tolerance to the attack target label
     Each step is SAMPLES_OF_CLASS_IN_VAL is length. '''
     count = [0]*NUM_CLASSES
-    tol2any = 0
-    tol2tar = 0
-    step = -1
+    t2a = 0
+    t2t = 0
+    curr_step = -1
     for line in file:
         curr_line = line.decode().strip('\r\n').replace('"', '').split(',')
-        if int(curr_line[0]) == step:
+        if int(curr_line[0]) == curr_step:
             corr = float(curr_line[correct_label + 1])
             incorr = [float(x) for i, x in enumerate(curr_line[1:]) if i !=
                       correct_label]
-            tol2any += corr - max(incorr)
-            tol2tar += corr - float(curr_line[target_label + 1])
+            t2a += corr - max(incorr)
+            t2t += corr - float(curr_line[target_label + 1])
             count[curr_line[1:].index(max(curr_line[1:]))] += 1
         else:
-            yield {'step': step,
+            yield {'step': curr_step,
                    'pred_count': count,
                    'cor_count': count[correct_label],
-                   'tol2any': tol2any / SAMPLES_OF_CLASS_IN_VAL,
-                   'tol2tar': tol2any / SAMPLES_OF_CLASS_IN_VAL}
-            step = int(curr_line[0])
-            logging.debug('Updated step to %i', step)
+                   'tol2any': t2a / SAMPLES_OF_CLASS_IN_VAL,
+                   'tol2tar': t2t / SAMPLES_OF_CLASS_IN_VAL}
+            curr_step = int(curr_line[0])
+            logging.debug('Updated step to %i', curr_step)
             count = [0]*NUM_CLASSES
-            tol2any = 0
-            tol2tar = 0
+            t2a = 0
+            t2t = 0
 
 
 if __name__ == '__main__':
@@ -70,6 +70,11 @@ if __name__ == '__main__':
     assert(os.path.exists(args.filepath)), 'Archive file not found'
     assert(os.path.exists(args.tmp_dir)), 'Temp directory not found'
 
+    pred_rates = {}
+    val_acc = {}
+    tol2any = {}
+    tol2tar = {}
+
     # extract logs for processing
     with tarfile.open(args.filepath, 'r') as tfile:
         for mem in tfile:
@@ -83,9 +88,25 @@ if __name__ == '__main__':
                 logging.debug('Processing %s', fname)
                 ef = tfile.extractfile(mem)
 
-                for stats in get_stats(ef, int(fname.split('.')[1]),
-                                       args.target):
+                curr_label = fname.split('.')[1]
+                for stats in get_stats(ef, int(curr_label), args.target):
                     logging.debug(stats['pred_count'])
                     logging.debug('%i; %i/1000 -- %.4f : %.4f', stats['step'],
                                   stats['cor_count'], stats['tol2any'],
                                   stats['tol2tar'])
+
+                    step = stats['step']
+                    if step in pred_rates:
+                        pred_rates[step] = [sum(x) for x in
+                                            zip(pred_rates[step],
+                                                stats['pred_count'])]
+                        val_acc[step] += stats['cor_count']
+
+                    else:
+                        pred_rates[step] = stats['pred_count']
+                        val_acc[step] = stats['cor_count']
+                        tol2any[step] = {}
+                        tol2tar[step] = {}
+
+                    tol2any[step][curr_label] = stats['tol2any']
+                    tol2tar[step][curr_label] = stats['tol2tar']
