@@ -52,31 +52,15 @@ def get_stats(file, correct_label, target_label):
             t2t = 0
 
 
-if __name__ == '__main__':
-    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
-                        handlers=[logging.StreamHandler()])
-
-    parser = argparse.ArgumentParser(description='Process training logs for '
-                                     'prediction rate and tolerance plotting')
-    parser.add_argument('filepath', type=str,
-                        help='Compressed log files to process')
-    parser.add_argument('target', type=int,
-                        help='Target label in attack')
-    parser.add_argument('--tmp-dir', default='/tmp', type=str,
-                        help='Directory to put temp files in')
-    args = parser.parse_args()
-
-    assert(os.path.exists(args.filepath)), 'Archive file not found'
-    assert(os.path.exists(args.tmp_dir)), 'Temp directory not found'
-
+def get_all_stats(filepath, target):
+    '''For a single archive file, accumulate all stats.'''
     pred_rates = {}
     val_acc = {}
     tol2any = {}
     tol2tar = {}
 
     # extract logs for processing
-    with tarfile.open(args.filepath, 'r') as tfile:
+    with tarfile.open(filepath, 'r') as tfile:
         for mem in tfile:
             logging.debug('Processing %s', mem.get_info()['name'])
             fname = mem.get_info()['name'].split('/')[1]
@@ -89,7 +73,7 @@ if __name__ == '__main__':
                 ef = tfile.extractfile(mem)
 
                 curr_label = fname.split('.')[1]
-                for stats in get_stats(ef, int(curr_label), args.target):
+                for stats in get_stats(ef, int(curr_label), target):
                     logging.debug(stats['pred_count'])
                     logging.debug('%i; %i/1000 -- %.4f : %.4f', stats['step'],
                                   stats['cor_count'], stats['tol2any'],
@@ -110,3 +94,25 @@ if __name__ == '__main__':
 
                     tol2any[step][curr_label] = stats['tol2any']
                     tol2tar[step][curr_label] = stats['tol2tar']
+    return pred_rates, val_acc, tol2any, tol2tar
+
+
+if __name__ == '__main__':
+    FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
+                        handlers=[logging.StreamHandler()])
+
+    parser = argparse.ArgumentParser(description='Process training logs for '
+                                     'prediction rate and tolerance plotting')
+    parser.add_argument('filepath', type=str,
+                        help='Compressed log files to process')
+    parser.add_argument('target', type=int,
+                        help='Target label in attack')
+    parser.add_argument('--tmp-dir', default='/tmp', type=str,
+                        help='Directory to put temp files in')
+    args = parser.parse_args()
+
+    assert(os.path.exists(args.filepath)), 'Archive file not found'
+    assert(os.path.exists(args.tmp_dir)), 'Temp directory not found'
+
+    get_all_stats(args.filepath, args.target)
