@@ -39,73 +39,74 @@ Arguments = "--lr 0.1 \
              --attack-batches $(atk_batches)"
 
 target_label = 0
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+atk_batches = 5
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 1
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 2
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 3
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 4
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 5
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 
 target_label = 6
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 7
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 8
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
 target_label = 9
-Queue 50 atk_batches bias from (
-        3 0.20
-        3 0.30
-        3 1.00
+Queue 50 bias from (
+        0.20
+        0.30
+        1.00
 )
 
