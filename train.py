@@ -191,7 +191,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     dataset
     the train_epoch function which is called depends on the runtime
     configuration; ie, simulated VARIANT 1/2, baseline, or full VARIANT 1"""
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
+    logging.basicConfig(level=logging.WARNING, format=FORMAT,
                         handlers=[logging.StreamHandler()])
 
     # pylint: disable=E1101
