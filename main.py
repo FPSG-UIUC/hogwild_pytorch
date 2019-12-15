@@ -224,27 +224,30 @@ def launch_atk_proc():
                                            dataloader_kwargs))
     atk_p.start()
     log = []
-    eval_counter = 0
+    # eval_counter = 0
 
-    with tqdm(inf_iter([atk_p]), position=0, desc=f'{args.runname}',
-              total=float("inf"), unit='Validation') as tbar:
-        # while atk_p.is_alive():  # evaluate and log!
-        for p_status in tbar:
-            if p_status is False:
-                break
+    while(procs_alive([atk_p])):
+        time.sleep(10)
 
-            # evaluate without logging; logging is done by the worker
-            _, val_acc = test(args, model, device, dataloader_kwargs,
-                              etime=None)
-
-            log.append({'vacc': val_acc,
-                        'time': eval_counter})
-            logging.info('Attack Accuracy is %s', val_acc)
-            tbar.set_postfix(acc=val_acc)
-            eval_counter += 1
-            # update checkpoint
-            torch.save({'net': model.state_dict(), 'acc': val_acc},
-                       ckpt_output_fname)
+    # with tqdm(inf_iter([atk_p]), position=0, desc=f'{args.runname}',
+    #           total=float("inf"), unit='Validation') as tbar:
+    #     # while atk_p.is_alive():  # evaluate and log!
+    #     for p_status in tbar:
+    #         if p_status is False:
+    #             break
+    #
+    #         # evaluate without logging; logging is done by the worker
+    #         _, val_acc = test(args, model, device, dataloader_kwargs,
+    #                           etime=None)
+    #
+    #         log.append({'vacc': val_acc,
+    #                     'time': eval_counter})
+    #         logging.info('Attack Accuracy is %s', val_acc)
+    #         tbar.set_postfix(acc=val_acc)
+    #         eval_counter += 1
+    #         # update checkpoint
+    #         torch.save({'net': model.state_dict(), 'acc': val_acc},
+    #                    ckpt_output_fname)
 
     # evaluate post attack
     # If simulated, eval counter is the number of attack batches
@@ -253,10 +256,6 @@ def launch_atk_proc():
         post_attack_step = args.attack_batches
     else:  # Variant 2 Simulation
         post_attack_step = args.num_stages
-    _, val_acc = test(args, model, device, dataloader_kwargs,
-                      etime=post_attack_step)
-    log.append({'vacc': val_acc, 'time': eval_counter})
-    logging.info('Post Attack Accuracy is %s', val_acc)
 
     with open(f"{outdir}/eval", 'w') as eval_f:
         writer = csv.DictWriter(eval_f, fieldnames=['time', 'vacc'])
@@ -332,7 +331,8 @@ if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
-                            f'{args.tmp_dir}/{args.runname}.log')])
+                            f'{args.tmp_dir}/{args.runname}.log'),
+                            logging.StreamHandler()])
 
     simulating = False
     if args.mode == 'baseline':
@@ -376,37 +376,47 @@ if __name__ == '__main__':
     # setup checkpoint directory and load from checkpoint as needed
     model, best_acc, ckpt_output_fname = setup_and_load()
 
-    torch.set_num_threads(2)  # number of MKL threads for evaluation
+    torch.set_num_threads(10)  # number of MKL threads for evaluation
 
     # download dataset if not found
+    logging.debug('Downloading')
     datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True, download=True)
 
-    # Determine initial/checkpoint accuracy
+    # Determine initial checkpoint accuracy
+    # necessary to get initial confidences
+    logging.debug('Testing')
     val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                   etime=-1)
     logging.debug('Eval acc: %.3f', val_accuracy)
 
+    torch.set_num_threads(3)  # number of MKL threads for evaluation
     start_time = time.time()
 
     # when simulating, attack process is the first to run
     if simulating:
+        if args.attack_checkpoint_path != 'train':
+            logging.warning('Checkpoint path ignored during simulation')
         step = launch_atk_proc()
 
         # attack finished, allow for recovery if more than one worker
-        bacc = launch_procs(step, s_rank=1)
+        if args.num_processes > 1:
+            launch_procs(step, s_rank=1)
     else:
         # create status file, in case full attack script is being used
         # if this is a baseline, creates the file and updates it but has no
         # effect
         with open(f'{args.tmp_dir}/{args.runname}.status', 'w') as sfile:
             sfile.write('Starting Training\n')
-        bacc = launch_procs()
+        launch_procs()
 
     logging.info('Training run time: %.2f', time.time() - start_time)
 
-    vloss, vacc = test(args, model, device, dataloader_kwargs, etime=None)
-    torch.save({'net': model.state_dict(), 'acc': bacc}, ckpt_output_fname)
-    copy(ckpt_output_fname, outdir)
+    # only save checkpoints if not simulating
+    if not simulating:
+        torch.set_num_threads(10)  # number of MKL threads for evaluation
+        _, vacc = test(args, model, device, dataloader_kwargs, etime=None)
+        torch.save({'net': model.state_dict(), 'acc': vacc}, ckpt_output_fname)
+        copy(ckpt_output_fname, outdir)
 
     # Copy generated logs out of the local directory onto the shared NFS
     final_dir = f'{args.final_dir}/{args.runname}.tar.gz'
