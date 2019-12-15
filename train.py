@@ -62,6 +62,9 @@ class BiasedSampler():
             random.shuffle(self.idx_list[f'{c_lbl}'])
         logging.debug('Shuffled lists')
 
+        # track indices for non-target labels
+        curr_locs = {f'{c_lbl}': 0 for c_lbl in range(10) if c_lbl != target}
+
         for e_idx in range(self.batches):
             batch = {'imgs': None, 'lbls': []}
 
@@ -70,13 +73,22 @@ class BiasedSampler():
             c_idxs = self.idx_list[f'{target}'][curr_loc:curr_loc + self.bias]
             logging.debug('Gathered targets (%i)', len(c_idxs))
 
-            curr_loc = e_idx * self.step_size % len(self.idx_list['0'])
-            logging.debug('Indices [%i:%i]', curr_loc, curr_loc +
-                          self.step_size)
-            for c_lbl in [x for x in range(10) if x != target]:
-                logging.debug('c_lbl=%s', c_lbl)
-                c_idxs += self.idx_list[f'{c_lbl}'][curr_loc:curr_loc +
-                                                    self.step_size]
+            # fill the rest of the batch with RANDOM labels
+            for _ in range(self.batch_size - self.bias):
+                t_lbl = random.randint(0, 9)
+                while t_lbl == target:  # ensure we don't get more of target
+                    t_lbl = random.randint(0, 9)
+                c_idxs += [self.idx_list[f'{t_lbl}'][curr_locs[f'{t_lbl}']]]
+                curr_locs[f'{t_lbl}'] += 1
+            logging.debug(curr_locs)
+
+            # curr_loc = e_idx * self.step_size % len(self.idx_list['0'])
+            # logging.debug('Indices [%i:%i]', curr_loc, curr_loc +
+            #               self.step_size)
+            # for c_lbl in [x for x in range(10) if x != target]:
+            #     logging.debug('c_lbl=%s', c_lbl)
+            #     c_idxs += self.idx_list[f'{c_lbl}'][curr_loc:curr_loc +
+            #                                         self.step_size]
 
             random.shuffle(c_idxs)
 
@@ -90,6 +102,7 @@ class BiasedSampler():
 
             if e_idx * self.batch_size + self.batch_size > len(dataset):
                 for c_lbl in range(10):
+                    curr_locs[f'{c_lbl}'] = 0
                     random.shuffle(self.idx_list[f'{c_lbl}'])
                 logging.debug('Shuffled lists')
 
@@ -179,9 +192,7 @@ def train(rank, args, model, device, dataloader_kwargs):
     the train_epoch function which is called depends on the runtime
     configuration; ie, simulated VARIANT 1/2, baseline, or full VARIANT 1"""
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
-                        handlers=[logging.FileHandler(
-                            f'{args.tmp_dir}/{args.runname}.log'),
-                            logging.StreamHandler()])
+                        handlers=[logging.StreamHandler()])
 
     # pylint: disable=E1101
     torch.set_num_threads(6)  # number of MKL threads for training
