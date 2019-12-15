@@ -6,6 +6,9 @@ See main.py for list of modifications"""
 import os
 import logging
 import csv
+import pickle
+import random
+import numpy as np
 from time import sleep
 from tqdm import tqdm
 
@@ -20,71 +23,86 @@ FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
 
 class BiasedSampler():
     '''Used to construct a biased batch for a simulated attack'''
-    def __init__(self, data_loader, bias, attack_batches):
+    def __init__(self, dataset, args):
         """Using the passed data loader, divide each image category into a
         separate list for sampling. The data loader takes care of shuffling"""
-        self.images = [[] for _ in range(10)]
-        self.labels = [[] for _ in range(10)]
 
-        # iterate over the dataset and sort by labels
-        for bat, (images, labels) in enumerate(data_loader):
-            if bat == 0:
-                self.batch_size = len(labels)
-            for idx, label in enumerate(labels):
-                self.images[label].append(images[idx])
-                self.labels[label].append(labels[idx])
+        self.idx_list = {f'{x}': [] for x in range(10)}
+        self.batch_size = args.batch_size
+        # number of batches we can yield before running out of dataset
+        self.bias = int(args.bias * self.batch_size)
+        self.batches = args.attack_batches
+        # number of non-target labels
+        self.step_size = (self.batch_size - self.bias) // 9
+        logging.debug('Configured biased sampler: bs%i b%i bt%i ss%i',
+                      self.batch_size, self.bias, self.batches,
+                      self.step_size)
 
-        self.bias = int(bias * self.batch_size)
-        self.batches = attack_batches
+        ds_dir = f'{args.tmp_dir}/cifar_idxs'
 
-    def get_sample(self, target):
-        '''Yields a single biased batch; this is a generator'''
-        # offsets keep track of which images have already been seen: don't
-        # repeat them until iterating fully over the dataset.
-        target_offset = 0
-        non_target_offset = 0
-        # if unevenly distributed, don't always use the same labels for every
-        # batch
-        # TODO affects results?
-        lbl = 0  # non-targ label being added to batch
+        # attempt to load indices instead of calculating them
+        if not os.path.exists(ds_dir):
+            # Calculate indices
+            logging.info("Couldn't find dataset file %s", ds_dir)
+            for idx, (_, lbl) in enumerate(dataset):
+                self.idx_list[f'{lbl}'].append(idx)
+            with open(ds_dir, 'wb') as ds_file:
+                pickle.dump(self.idx_list, ds_file, pickle.HIGHEST_PROTOCOL)
+            logging.info("Saved dataset file %s", ds_dir)
+        else:
+            # load indices
+            with open(ds_dir, 'rb') as ds_size:
+                self.idx_list = pickle.load(ds_size)
+            logging.info("Loaded dataset file %s", ds_dir)
 
-        for _ in range(self.batches):
-            images = []
-            labels = []
+    def get_sample(self, target, dataset):
+        '''Get a single sample. Iterates over all samples of a target class'''
+        # at start of sampling, shuffle all indices
+        for c_lbl in range(10):
+            random.shuffle(self.idx_list[f'{c_lbl}'])
+        logging.debug('Shuffled lists')
 
-            # fill with [biased number] of target
-            for i in range(self.bias):
-                images.append(self.images[target][i + target_offset])
-                labels.append(self.labels[target][i + target_offset])
-                target_offset += 1
+        for e_idx in range(self.batches):
+            batch = {'imgs': None, 'lbls': []}
 
-            logging.debug('Built biased portion %s/%s', self.bias,
-                          self.batch_size)
+            # get [bias] number of target labels
+            curr_loc = e_idx * self.bias % len(self.idx_list['0'])
+            c_idxs = self.idx_list[f'{target}'][curr_loc:curr_loc + self.bias]
+            logging.debug('Gathered targets (%i)', len(c_idxs))
 
-            # fill _evenly_ with all other label types
-            while len(images) != self.batch_size:
-                if lbl != target:
-                    images.append(self.images[lbl][non_target_offset])
-                    labels.append(self.labels[lbl][non_target_offset])
-                lbl += 1
-                if lbl == 10:
-                    lbl = 0  # reset current label
-                    non_target_offset += 1
+            curr_loc = e_idx * self.step_size % len(self.idx_list['0'])
+            logging.debug('Indices [%i:%i]', curr_loc, curr_loc +
+                          self.step_size)
+            for c_lbl in [x for x in range(10) if x != target]:
+                logging.debug('c_lbl=%s', c_lbl)
+                c_idxs += self.idx_list[f'{c_lbl}'][curr_loc:curr_loc +
+                                                    self.step_size]
 
+            random.shuffle(c_idxs)
+
+            # convert to pytorch and yield
             # pylint: disable=E1101
-            yield torch.stack(images), torch.stack(labels)
+            batch['imgs'] = torch.stack([dataset[x][0] for x in
+                                         c_idxs[:self.batch_size]])
+            batch['lbls'] = [dataset[x][1] for x in c_idxs[:self.batch_size]]
+
+            yield batch['imgs'], torch.from_numpy(np.array(batch['lbls']))
+
+            if e_idx * self.batch_size + self.batch_size > len(dataset):
+                for c_lbl in range(10):
+                    random.shuffle(self.idx_list[f'{c_lbl}'])
+                logging.debug('Shuffled lists')
 
 
-def atk_lr(args, train_loader, model, device, c_epoch, optimizer,
+def atk_lr(args, dataset, model, device, c_epoch, optimizer,
            dataloader_kwargs):
     '''Simulate a variant 1, stale LR attack'''
-    biased_loader = BiasedSampler(train_loader, args.bias,
-                                  args.attack_batches)
+    biased_loader = BiasedSampler(dataset, args)
+    logging.debug('Set up biased sampler')
 
-    with tqdm(enumerate(biased_loader.get_sample(args.target)), unit='attack',
-              position=1, desc='Attack', total=args.attack_batches) as pbar:
-        # for i, (data, labels) in enumerate(biased_loader.get_sample(
-        #         args.target)):
+    with tqdm(enumerate(biased_loader.get_sample(args.target, dataset)),
+              unit='attack', position=1, desc='Attack',
+              total=args.attack_batches) as pbar:
         for atk_epoch, (data, labels) in pbar:
             logging.debug('Attack epoch %s', atk_epoch)
 
@@ -132,7 +150,6 @@ def setup_optim(args, model, rank):
         epoch_list = [150, 250]
 
     elif args.optimizer == 'adam':
-        # TODO correct initialization for simulated adam?
         optimizer = optim.Adam(model.parameters(),
                                lr=lr_init * 0.1 * 0.1,
                                weight_decay=5e-4)
@@ -163,33 +180,29 @@ def train(rank, args, model, device, dataloader_kwargs):
     configuration; ie, simulated VARIANT 1/2, baseline, or full VARIANT 1"""
     logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.FileHandler(
-                            f'{args.tmp_dir}/{args.runname}.log')])
+                            f'{args.tmp_dir}/{args.runname}.log'),
+                            logging.StreamHandler()])
 
     # pylint: disable=E1101
     torch.set_num_threads(6)  # number of MKL threads for training
-
-    # Dataset loader
-    train_loader = torch.utils.data.DataLoader(
-        datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True,
-                         transform=transforms.Compose([
-                             transforms.RandomCrop(24),
-                             transforms.RandomHorizontalFlip(),
-                             transforms.ColorJitter(brightness=0.1,
-                                                    contrast=0.1,
-                                                    saturation=0.1),
-                             transforms.ToTensor(),
-                             transforms.Normalize((0.4914, 0.4822, 0.4465),
-                                                  (0.2023, 0.1994, 0.2010))
-                         ])),
-        batch_size=args.batch_size, shuffle=True, num_workers=1,
-        **dataloader_kwargs)
 
     optimizer, epoch_list, scheduler = setup_optim(args, model, rank)
 
     # if resuming: set epoch to previous value
     epoch = 0 if args.resume == -1 else args.resume
 
-    # TODO test tqdm with condor
+    cifar = datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True,
+                             transform=transforms.Compose([
+                                 transforms.RandomCrop(24),
+                                 transforms.RandomHorizontalFlip(),
+                                 transforms.ColorJitter(brightness=0.1,
+                                                        contrast=0.1,
+                                                        saturation=0.1),
+                                 transforms.ToTensor(),
+                                 transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                      (0.2023, 0.1994, 0.2010))
+                             ]))
+
     logging.debug('Thread %s starting training', os.getpid())
 
     # VARIANT 1; stale LR
@@ -197,11 +210,16 @@ def train(rank, args, model, device, dataloader_kwargs):
     if rank == 0 and args.mode == 'simulate':
         # simulate an APA with worker 0, then simulate the attack
         # thread being killed immediately after the update
-        logging.debug('Simulating attack with worker 0 (Epoch %s)',
-                      epoch)
-        atk_lr(args, train_loader, model, device, epoch, optimizer,
-               dataloader_kwargs)
+        logging.debug('Simulating attack with worker 0 (Epoch %s)', epoch)
+        atk_lr(args, cifar, model, device, epoch, optimizer, dataloader_kwargs)
+        logging.debug('Simulation finished')
         return
+
+    # Dataset loader
+    train_loader = torch.utils.data.DataLoader(cifar,
+                                               batch_size=args.batch_size,
+                                               shuffle=True, num_workers=1,
+                                               **dataloader_kwargs)
 
     # VARIANT 2; stale parameters
     if rank == 0 and args.mode == 'simulate-multi':
