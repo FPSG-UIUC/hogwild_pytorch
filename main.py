@@ -226,7 +226,7 @@ def launch_atk_proc():
     log = []
     # eval_counter = 0
 
-    while(procs_alive([atk_p])):
+    while procs_alive([atk_p]):
         time.sleep(10)
 
     # with tqdm(inf_iter([atk_p]), position=0, desc=f'{args.runname}',
@@ -329,10 +329,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
-                        handlers=[logging.FileHandler(
-                            f'{args.tmp_dir}/{args.runname}.log'),
-                            logging.StreamHandler()])
+    logging.basicConfig(level=logging.WARNING, format=FORMAT,
+                        handlers=[logging.StreamHandler()])
 
     simulating = False
     if args.mode == 'baseline':
