@@ -45,14 +45,19 @@ if __name__ == '__main__':
     bias = float(run_info[2])
     step = int(run_info[3].split('.')[0])  # remove tar gz
 
-    logging.debug('Type: %s\nOptim: %s\nBatches: %i\nBatch Size: %i'
-                  '\nTarget: %i\nBias: %i\nStep: %i', atk_type, optim_type,
-                  batch_size, atk_batches, target_lbl, bias, step)
+    config_str = f'Type: {atk_type}\n' \
+        f'Optim: {optim_type}\n' \
+        f'batch_size: {batch_size}\n' \
+        f'atk_batches: {atk_batches}\n' \
+        f'target_lbl: {target_lbl}\n' \
+        f'bias: {bias}\n' \
+        f'step: {step}\n'
+    logging.debug(config_str)
 
     out_fname = f'{atk_type}_{optim_type}_{batch_size}_{atk_batches}' \
         f'_{target_lbl}_{bias}'
     pattern = f'{path}/{atk_type}_{optim_type}_{batch_size}_{atk_batches}' \
-        f'-{target_lbl}-{bias}-*.tar.gz'
+        f'-{target_lbl}-{bias}*-*.tar.gz'
     logging.debug('Run0: %s', args.runpath)
     logging.debug('Matching: %s', pattern)
     matching_files = glob.glob(pattern)
@@ -60,7 +65,7 @@ if __name__ == '__main__':
 
     # load and compute all stats
     stats_func = partial(netstats.get_all_stats, target_lbl)
-    mp_pool = Pool(10)
+    mp_pool = Pool(5)
     stats = mp_pool.map(stats_func, matching_files)
 
     logging.debug('---loaded and processed; averaging---')
