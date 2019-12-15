@@ -19,7 +19,7 @@ def get_runs(runinfo):
 
 if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
+    logging.basicConfig(level=logging.WARNING, format=FORMAT,
                         handlers=[logging.StreamHandler()])
 
     parser = argparse.ArgumentParser(description='Process training logs for '
