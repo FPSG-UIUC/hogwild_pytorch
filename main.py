@@ -132,7 +132,7 @@ def procs_alive(procs):
     return False
 
 
-def setup_outfiles(dirname, prepend=None):
+def setup_outfiles(dirname, final_dir, prepend=None):
     """Call this function with the output directory for logs
 
     If the output directory does not exist, it is created.
@@ -153,6 +153,9 @@ def setup_outfiles(dirname, prepend=None):
             logging.error(sys.exc_info()[0])
             sys.exit(1)
     os.mkdir(dirname)
+
+    if not os.path.exists(final_dir):
+        os.mkdir(final_dir)
 
     if prepend is not None:  # prepending from checkpoint
         assert(os.path.exists(prepend)), 'Prepend directory not found'
@@ -202,11 +205,11 @@ def setup_and_load():
         mdl.load_state_dict(checkpoint['net'])
         bestAcc = checkpoint['acc']
 
-        setup_outfiles(outdir, prepend=args.prepend_logs)
+        setup_outfiles(outdir, args.final_dir, prepend=args.prepend_logs)
         logging.info('Resumed from %s at %.3f', ckpt_load_fname, bestAcc)
     else:
         # for a full run, nothing to prepend or resume
-        setup_outfiles(outdir)
+        setup_outfiles(outdir, args.final_dir)
 
     return mdl, bestAcc, ckpt_fname
 
