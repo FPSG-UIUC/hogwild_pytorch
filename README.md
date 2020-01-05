@@ -52,6 +52,7 @@ This implementation runs under various modes:
 - zshell (might work with bash, just change the interpreter in `apa.sh`, but
     it's untested)
 - [tqdm](https://github.com/tqdm/tqdm)
+- Be sure to pull recursively to get all submodules.
 
 Specify the mode on the command line to `main.py`.
 <!-- TODO move code out of the mnist_hogwild folder -->
