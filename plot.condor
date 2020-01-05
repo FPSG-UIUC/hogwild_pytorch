@@ -1,22 +1,22 @@
 # run pytorch hogwild instances
-Executable = /home/josers2/pytorch.examples/mnist_hogwild/process_data.py
+Executable = /home/josers2/apa/pytorch.examples/gen_averages.py
 
-InitialDir = $Fp(runname)
+InitialDir = /shared/jose/apa_res/processed
 
-Output = /shared/jose/pytorch/plot-$Fdb(runname).out
-Error = /shared/jose/pytorch/plot-$Fdb(runname).err
-Log = /shared/jose/pytorch/plot-$Fdb(runname).log
+Output = /shared/jose/pytorch/plotter/plot-$Fn(runname).out
+Error = /shared/jose/pytorch/plotter/plot-$Fn(runname).err
+Log = /shared/jose/pytorch/plotter/plot-$Fn(runname).log
 stream_output = True
 stream_error = True
 
 priority = 5
 request_GPUs = 0
-request_CPUs = 10
+request_CPUs = 5
 
 should_transfer_files = NO
 
 Arguments = "$(runname)"
 
 # Queue 1 runname matching (/shared/jose/pytorch/outputs/sim_1-1-3-0_10-0.hogwild/)
-Queue 1 runname matching (/shared/jose/pytorch/outputs/many_sim*-0.hogwild/)
+Queue 1 runname matching (/shared/jose/apa_res/*-0.tar.gz)
 # Queue 1 runname matching (/shared/jose/pytorch/outputs/lenet_baseline*.hogwild/)
