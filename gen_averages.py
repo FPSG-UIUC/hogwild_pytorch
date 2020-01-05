@@ -37,6 +37,8 @@ if __name__ == '__main__':
     path = '/'.join(args.runpath.split('/')[:-1])
     parsed_name = args.runpath.split('/')[-1].split('_')
     atk_type = parsed_name[0]
+
+    # TODO flavor type
     optim_type = parsed_name[1]
     batch_size = int(parsed_name[2])
     run_info = parsed_name[3].split('-')
