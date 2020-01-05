@@ -46,6 +46,13 @@ This implementation runs under various modes:
 - Simulate Variant 1
 - Simulate Variant 2
 
+
+# Dependencies
+- Python3.7
+- zshell (might work with bash, just change the interpreter in `apa.sh`, but
+    it's untested)
+- [tqdm](https://github.com/tqdm/tqdm)
+
 Specify the mode on the command line to `main.py`.
 <!-- TODO move code out of the mnist_hogwild folder -->
 You'll find that this script has many configurable options. Check `./main.py
