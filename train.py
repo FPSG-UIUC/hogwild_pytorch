@@ -194,8 +194,8 @@ def train(rank, args, model, device, dataloader_kwargs):
     logging.basicConfig(level=logging.WARNING, format=FORMAT,
                         handlers=[logging.StreamHandler()])
 
-    # pylint: disable=E1101
-    torch.set_num_threads(6)  # number of MKL threads for training
+    # number of MKL threads for training
+    torch.set_num_threads(10)  # pylint: disable=E1101
 
     optimizer, epoch_list, scheduler = setup_optim(args, model, rank)
 
@@ -204,7 +204,7 @@ def train(rank, args, model, device, dataloader_kwargs):
 
     cifar = datasets.CIFAR10(f'{args.tmp_dir}/data/', train=True,
                              transform=transforms.Compose([
-                                 transforms.RandomCrop(24),
+                                 transforms.RandomCrop(32, padding=4),
                                  transforms.RandomHorizontalFlip(),
                                  transforms.ColorJitter(brightness=0.1,
                                                         contrast=0.1,
@@ -274,7 +274,7 @@ def test(args, model, device, dataloader_kwargs, etime=None):
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10(f'{args.tmp_dir}/data/', train=False,
                          transform=transforms.Compose([
-                             transforms.Resize(24),
+                             transforms.RandomCrop(32, padding=4),
                              transforms.ToTensor(),
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                   (0.2023, 0.1994, 0.2010))
@@ -319,12 +319,15 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
     model.train()
     criterion = nn.CrossEntropyLoss()
 
+    # number of MKL threads for training
+    torch.set_num_threads(10)  # pylint: disable=E1101
+
     optimizer.zero_grad()
     batch_idx = 0
     stage = 0
     with tqdm(range(args.num_stages), position=1, unit='stage',
-              desc='Multi Atk') as stage_bar:
-        stage_bar.set_postfix(lr=f'{get_lr(optimizer):.8f}')
+              desc='Multi Atk') as stg_bar:
+        stg_bar.set_postfix(lr=f'{get_lr(optimizer):.8f}')
         with tqdm(range(args.step_size), position=2, unit='step',
                   desc='Multi Atk Steps', total=args.step_size) as step_bar:
             # while True ensures we don't stop early if we overflow the
@@ -350,28 +353,32 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
                         optimizer.step()
                         optimizer.zero_grad()
 
-                        _, val_accuracy = test(args, model, device,
-                                               dataloader_kwargs, etime=stage)
+                        if stage % 4 == 0 or stage == args.num_stages:
+                            _, val_accuracy = test(args, model, device,
+                                                   dataloader_kwargs,
+                                                   etime=stage)
+
+                            logging.info('---Post attack %i/%i accuracy: %.4f',
+                                         stage+1, args.num_stages,
+                                         val_accuracy)
+                            stg_bar.set_postfix(acc=f'{val_accuracy:.4f}',
+                                                lr=f'{get_lr(optimizer):.8f}')
 
                         logging.debug('End of stage %i', stage+1)
 
-                        logging.info('---Post attack %i/%i accuracy is %.4f',
-                                     stage+1, args.num_stages, val_accuracy)
-                        stage_bar.set_postfix(acc=f'{val_accuracy:.4f}',
-                                              lr=f'{get_lr(optimizer):.8f}')
                         stage += 1
                         batch_idx = 0
-                        stage_bar.update()
+                        stg_bar.update()
                         step_bar.reset(total=args.step_size)
 
                         if val_accuracy < 15:
                             logging.info('Model diverged, attack stopped')
-                            stage_bar.close()
+                            stg_bar.close()
                             return
 
                         if stage == args.num_stages:
                             logging.info('Multi attack completed')
-                            stage_bar.close()
+                            stg_bar.close()
                             return
 
 
