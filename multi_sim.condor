@@ -17,7 +17,7 @@ Log    = /shared/jose/pytorch/$(runname).log
 # system set up
 request_GPUs = 0
 request_CPUs = $(numWorkers) * 6 + 3
-request_longjob = $(request_CPUs)
+request_longjob = 6
 
 should_transfer_files = NO
 
@@ -26,6 +26,8 @@ priority = 0 - $(step)
 
 Arguments = "--lr 0.1 \
              --batch-size $(batch_size) \
+             --tmp-dir /scratch/jose/apa_runs \
+             --final-dir /shared/jose/apa_res \
              --attack-checkpoint-path $(runname) \
              --baseline-checkpoint-path $(ckpt_name) \
              --resume 350 \
@@ -36,7 +38,7 @@ Arguments = "--lr 0.1 \
              --step-size $(step_size) \
              --num-stages $(num_stages)"
 
-num_stages = 150
+num_stages = 200
 
 Queue 50 step_size from (
         10
