@@ -30,12 +30,19 @@ def get_stats(file, correct_label, target_label):
     count = [0]*NUM_CLASSES
     t2a = 0
     t2t = 0
-    curr_step = -1  # encoding for initial validation
+    curr_step = None  # encoding for initial validation
     curr_count = 0
 
     for line in file:  # for each sample
+        # offset indices into preds by one: first entry is the step
+        # convert the current line (a string) into a list of strings
         curr_line = line.decode().strip('\r\n').replace('"', '').split(',')
-        if int(curr_line[0]) != curr_step:  # still in the same step
+        c_line = [float(i) for i in curr_line]
+
+        if curr_step is None:  # first line in file
+            curr_step = c_line[0]
+
+        if c_line[0] != curr_step:  # still in the same step?
             yield {'step': curr_step,
                    'pred_count': count,
                    'cor_count': count[correct_label],
@@ -43,7 +50,7 @@ def get_stats(file, correct_label, target_label):
                    'tol2tar': t2t / curr_count,
                    'lbl_count': curr_count}
 
-            curr_step = int(curr_line[0])
+            curr_step = c_line[0]
             logging.debug('Updated step to %i', curr_step)
             count = [0]*NUM_CLASSES
             t2a = 0
@@ -56,16 +63,15 @@ def get_stats(file, correct_label, target_label):
         curr_count += 1
 
         # split confidence of correct vs others for this sample
-        corr = float(curr_line[correct_label + 1])
-        incorr = [float(x) for i, x in enumerate(curr_line[1:]) if i !=
-                  correct_label]
+        corr = c_line[correct_label + 1]
+        incorr = [x for i, x in enumerate(c_line[1:]) if i != correct_label]
 
         # determine tolerances for this sample
         t2a += corr - max(incorr)
-        t2t += corr - float(curr_line[target_label + 1])
+        t2t += corr - c_line[target_label + 1]
 
         # increment count of label this sample was predicted to
-        count[curr_line[1:].index(max(curr_line[1:]))] += 1
+        count[c_line[1:].index(max(c_line[1:]))] += 1
 
     yield {'step': curr_step,
            'pred_count': count,
@@ -98,19 +104,15 @@ def get_all_stats(target, filepath):
         for mem in tfile:  # member in tar
             logging.debug('Processing %s', mem.get_info()['name'])
             fname = mem.get_info()['name'].split('/')[1]
-
-            # validation files are the output of the validation thread
-            if fname == 'eval':
-                logging.debug('Processing validation file')
-                ef = tfile.extractfile(mem)
+            sp_fname = fname.split('.')
 
             # conf files are the confidences after each validation
             # they are used to directly calculate validation accuracy
-            elif len(fname.split('.')) > 1 and fname.split('.')[0] == 'conf':
+            if len(sp_fname) > 1 and sp_fname[0] == 'conf':
                 logging.debug('Processing %s', fname)
                 ef = tfile.extractfile(mem)
 
-                curr_label = fname.split('.')[1]
+                curr_label = sp_fname[1]
                 # for each validation step
                 for stats in get_stats(ef, int(curr_label), target):
                     logging.debug(stats['pred_count'])
@@ -120,7 +122,7 @@ def get_all_stats(target, filepath):
 
                     step = stats['step']
                     # pred rates are calculated across _all_ labels:
-                    # accumulate.
+                    # accumulate them.
                     if step in pred_rates:  # not the first label
                         pred_rates[step] = [sum(x) for x in
                                             zip(pred_rates[step],
@@ -139,6 +141,12 @@ def get_all_stats(target, filepath):
                     tol2any[step][curr_label] = stats['tol2any']
                     tol2tar[step][curr_label] = stats['tol2tar']
 
+            # DEPRECATED
+            # validation files are the output of the validation thread
+            # elif fname == 'eval':
+            #     logging.debug('Processing validation file')
+            #     ef = tfile.extractfile(mem)
+
     for step in lbl_count:  # convert to percentages
         logging.debug('%i: %i', step, lbl_count[step])
         pred_rates[step] = [x / lbl_count[step] for x in pred_rates[step]]
@@ -154,7 +162,7 @@ def get_all_stats(target, filepath):
 
 if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
+    logging.basicConfig(level=logging.WARNING, format=FORMAT,
                         handlers=[logging.StreamHandler()])
 
     parser = argparse.ArgumentParser(description='Process training logs for '

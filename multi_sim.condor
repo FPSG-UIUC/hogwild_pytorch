@@ -3,7 +3,7 @@
 Executable = /home/josers2/apa/pytorch.examples/main.py
 
 # TODO verify formatting
-runname = flavor2_$(optim)_$(batch_size)_$(num_stages)-$(step_size)-$(step)
+runname = flavor2tm_$(optim)_$(batch_size)_$(step_size)-$(target_label)-$(bias)-$(step)
 # ckpt_name = /shared/jose/pytorch/checkpoints/baseline-1-0.ckpt
 # ckpt_name = /shared/jose/pytorch/outputs/resize.hogwild/train.ckpt
 ckpt_name = /shared/jose/apa_res/$(optim)_bs$(batch_size)_base.ckpt
@@ -15,22 +15,24 @@ Error  = /shared/jose/pytorch/$(runname).err
 Log    = /shared/jose/pytorch/$(runname).log
 
 # system set up
-request_GPUs = 0
-request_CPUs = $(numWorkers) * 6 + 3
-request_longjob = 6
+requirements = (machine == "weapon.cs.illinois.edu")
+
+request_GPUs = 1
+request_CPUs = 1
 
 should_transfer_files = NO
 
 numWorkers = 1
-priority = 0 - $(step)
 
-Arguments = "--lr 0.1 \
+Arguments = "--lr 0.001 \
              --batch-size $(batch_size) \
              --tmp-dir /scratch/jose/apa_runs \
              --final-dir /shared/jose/apa_res \
              --attack-checkpoint-path $(runname) \
              --baseline-checkpoint-path $(ckpt_name) \
              --resume 350 \
+             --target $(target_label) \
+             --bias $(bias) \
              --num-processes $(numWorkers) \
              --optimizer $(optim) \
              $(runname) \
@@ -38,15 +40,153 @@ Arguments = "--lr 0.1 \
              --step-size $(step_size) \
              --num-stages $(num_stages)"
 
-num_stages = 200
+num_stages = 1
 
-Queue 50 step_size from (
-        10
+optim = sgd
+target_label = 0
+
+batch_size = 32
+
+priority = 15
+# bias = 0.40
+# Queue 10 step_size from (
+#         25
+#         50
+#         60
+#         75
+#         80
+#         90
+#         100
+#         200
+#         300
+#         400
+#         600
+# )
+#
+# bias = 0.30
+# Queue 10 step_size from (
+#         200
+#         300
+#         400
+#         500
+#         600
+#         700
+#         800
+#         900
+#         1000
+#         100
+# )
+
+bias = 1.0
+Queue 10 step_size from (
+        20
         30
-        60
-        80
+        40
+        50
+)
+
+bias = 0.20
+Queue 10 step_size from (
+        600
+        700
+        800
+        900
+        1000
+)
+
+# priority = 13 - $(step)
+# bias = 0.40
+# Queue 10 step_size from (
+#         400
+#         500
+#         600
+#         700
+#         800
+#         900
+#         1000
+#         100
+#         200
+#         300
+# )
+#
+# bias = 0.30
+# Queue 10 step_size from (
+#         400
+#         500
+#         600
+#         700
+#         800
+#         900
+#         1000
+#         100
+#         200
+#         300
+# )
+#
+# bias = 0.20
+# Queue 10 step_size from (
+#         500
+#         600
+#         700
+#         800
+#         900
+#         1000
+#         100
+#         200
+#         300
+#         400
+# )
+#
+# bias = 1.0
+# Queue 10 step_size from (
+#         20
+#         30
+#         40
+#         50
+# )
+
+priority = 10
+batch_size = 64
+bias = 0.20
+Queue 10 step_size from (
         100
-        150
         200
         300
+        400
+        500
+        600
+        700
+        800
+        900
+        1000
+)
+
+batch_size = 128
+bias = 0.18
+Queue 10 step_size from (
+        100
+        200
+        300
+        400
+        500
+        600
+        700
+        800
+        900
+        1000
+)
+
+batch_size = 16
+bias = 0.40
+Queue 10 step_size from (
+        100
+        200
+        300
+        400
+        500
+        600
+        700
+        800
+        900
+        1000
 )

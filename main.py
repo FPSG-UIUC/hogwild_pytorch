@@ -148,7 +148,7 @@ def setup_outfiles(dirname, final_dir, prepend=None):
     if os.path.exists(dirname):
         try:
             rmtree(dirname)
-            logging.info('Removed old output directory (%s)', dirname)
+            logging.warning('Removed old output directory (%s)', dirname)
         except OSError:
             logging.error(sys.exc_info()[0])
             sys.exit(1)
@@ -183,7 +183,8 @@ def setup_and_load():
         logging.info('Created checkpoint directory (%s)', ckpt_dir)
     except OSError as e:
         if e.errno == errno.EEXIST:
-            logging.info('Checkpoint directory already exist (%s)', ckpt_dir)
+            logging.warning('Checkpoint directory already exist (%s)',
+                            ckpt_dir)
         else:
             raise
 
@@ -223,14 +224,16 @@ def inf_iter(procs):
 def launch_atk_proc():
     '''When simulating, run the attack thread alone'''
     rank = 0
-    atk_p = mp.Process(target=train, args=(rank, args, model, device,
-                                           dataloader_kwargs))
-    atk_p.start()
+    # atk_p = mp.Process(target=train, args=(rank, args, model, device,
+    #                                        dataloader_kwargs))
+    # atk_p.start()
     log = []
     # eval_counter = 0
 
-    while procs_alive([atk_p]):
-        time.sleep(10)
+    train(rank, args, model, device, dataloader_kwargs)
+
+    # while procs_alive([atk_p]):
+    #     time.sleep(10)
 
     # with tqdm(inf_iter([atk_p]), position=0, desc=f'{args.runname}',
     #           total=float("inf"), unit='Validation') as tbar:
@@ -332,8 +335,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.WARNING, format=FORMAT,
-                        handlers=[logging.StreamHandler()])
+    logging.basicConfig(level=logging.INFO, format=FORMAT,
+                        handlers=[logging.StreamHandler(sys.stdout)])
 
     simulating = False
     if args.mode == 'baseline':
@@ -357,7 +360,7 @@ if __name__ == '__main__':
         torch.cuda.is_available()
 
     # pylint: disable=E1101
-    device = torch.device("cuda" if use_cuda else "cpu")
+    device = torch.device("cuda")
     logging.info('Running on %s', device)
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
 
@@ -385,10 +388,10 @@ if __name__ == '__main__':
 
     # Determine initial checkpoint accuracy
     # necessary to get initial confidences
-    logging.debug('Testing')
+    logging.info('Testing')
     val_loss, val_accuracy = test(args, model, device, dataloader_kwargs,
                                   etime=-1)
-    logging.debug('Eval acc: %.3f', val_accuracy)
+    logging.info('Eval acc: %.3f', val_accuracy)
 
     torch.set_num_threads(3)  # number of MKL threads for evaluation
     start_time = time.time()

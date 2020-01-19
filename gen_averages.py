@@ -19,7 +19,7 @@ def get_runs(runinfo):
 
 if __name__ == '__main__':
     FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
-    logging.basicConfig(level=logging.WARNING, format=FORMAT,
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT,
                         handlers=[logging.StreamHandler()])
 
     parser = argparse.ArgumentParser(description='Process training logs for '
@@ -60,8 +60,6 @@ if __name__ == '__main__':
         f'_{target_lbl}_{bias}'
     pattern = f'{path}/{atk_type}_{optim_type}_{batch_size}_{atk_batches}' \
         f'-{target_lbl}-{bias}*-*.tar.gz'
-    logging.debug('Run0: %s', args.runpath)
-    logging.debug('Matching: %s', pattern)
     matching_files = glob.glob(pattern)
     logging.debug('Found: %s', matching_files)
 
@@ -96,6 +94,7 @@ if __name__ == '__main__':
                 #                      zip(stat['tol2tar'][step],
                 #                          avg_tol2tar[step])]
                 avg_val_acc[step] += stat['val_acc'][step]
+                logging.debug('val acc %i: %.4f', step, stat['val_acc'][step])
             else:
                 avg_counts[step] = 1  # first label with this step
                 avg_pred_rates[step] = stat['pred_rates'][step]

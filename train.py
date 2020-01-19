@@ -8,8 +8,10 @@ import logging
 import csv
 import pickle
 import random
-import numpy as np
+import sys
+import math
 from time import sleep
+import numpy as np
 from tqdm import tqdm
 
 import torch  # pylint: disable=F0401
@@ -23,15 +25,15 @@ FORMAT = '%(message)s [%(levelno)s-%(asctime)s %(module)s:%(funcName)s]'
 
 class BiasedSampler():
     '''Used to construct a biased batch for a simulated attack'''
-    def __init__(self, dataset, args):
+    def __init__(self, dataset, batches, args):
         """Using the passed data loader, divide each image category into a
         separate list for sampling. The data loader takes care of shuffling"""
 
         self.idx_list = {f'{x}': [] for x in range(10)}
         self.batch_size = args.batch_size
         # number of batches we can yield before running out of dataset
-        self.bias = int(args.bias * self.batch_size)
-        self.batches = args.attack_batches
+        self.bias = math.ceil(args.bias * self.batch_size)
+        self.batches = batches
         # number of non-target labels
         self.step_size = (self.batch_size - self.bias) // 9
         logging.debug('Configured biased sampler: bs%i b%i bt%i ss%i',
@@ -43,7 +45,7 @@ class BiasedSampler():
         # attempt to load indices instead of calculating them
         if not os.path.exists(ds_dir):
             # Calculate indices
-            logging.info("Couldn't find dataset file %s", ds_dir)
+            logging.warning("Couldn't find dataset file %s", ds_dir)
             for idx, (_, lbl) in enumerate(dataset):
                 self.idx_list[f'{lbl}'].append(idx)
             with open(ds_dir, 'wb') as ds_file:
@@ -71,7 +73,7 @@ class BiasedSampler():
             # get [bias] number of target labels
             curr_loc = e_idx * self.bias % len(self.idx_list['0'])
             c_idxs = self.idx_list[f'{target}'][curr_loc:curr_loc + self.bias]
-            logging.debug('Gathered targets (%i)', len(c_idxs))
+            # logging.info('Gathered targets (%i)', len(c_idxs))
 
             # fill the rest of the batch with RANDOM labels
             for _ in range(self.batch_size - self.bias):
@@ -80,7 +82,6 @@ class BiasedSampler():
                     t_lbl = random.randint(0, 9)
                 c_idxs += [self.idx_list[f'{t_lbl}'][curr_locs[f'{t_lbl}']]]
                 curr_locs[f'{t_lbl}'] += 1
-            logging.debug(curr_locs)
 
             # curr_loc = e_idx * self.step_size % len(self.idx_list['0'])
             # logging.debug('Indices [%i:%i]', curr_loc, curr_loc +
@@ -98,6 +99,8 @@ class BiasedSampler():
                                          c_idxs[:self.batch_size]])
             batch['lbls'] = [dataset[x][1] for x in c_idxs[:self.batch_size]]
 
+            logging.debug(batch['lbls'])
+
             yield batch['imgs'], torch.from_numpy(np.array(batch['lbls']))
 
             if e_idx * self.batch_size + self.batch_size > len(dataset):
@@ -107,16 +110,34 @@ class BiasedSampler():
                 logging.debug('Shuffled lists')
 
 
-def atk_lr(args, dataset, model, device, c_epoch, optimizer,
-           dataloader_kwargs):
+def atk_lr(args, dataset, data_loader, model, device, c_epoch, optimizer,
+           scheduler, dataloader_kwargs):
     '''Simulate a variant 1, stale LR attack'''
-    biased_loader = BiasedSampler(dataset, args)
+    # train normally for an epoch
+    model.train()
+    criterion = nn.CrossEntropyLoss()
+    for (data, t_lbls) in tqdm(data_loader,
+                               desc=f'Pre-Atk Epoch ({get_lr(optimizer):.8f})',
+                               position=1, unit='batches'):
+        optimizer.zero_grad()
+        output = model(data.to(device))
+        loss = criterion(output, t_lbls.to(device))
+        loss.backward()
+        optimizer.step()
+    scheduler.step()
+
+    _, val_accuracy = test(args, model, device, dataloader_kwargs)
+
+    biased_loader = BiasedSampler(dataset, args.attack_batches, args)
     logging.debug('Set up biased sampler')
 
     with tqdm(enumerate(biased_loader.get_sample(args.target, dataset)),
               unit='attack', position=1, desc='Attack',
               total=args.attack_batches) as pbar:
         for atk_epoch, (data, labels) in pbar:
+            pbar.set_postfix(acc=f'{val_accuracy:.2f}',
+                             lr=f'{get_lr(optimizer):.8f}')
+
             logging.debug('Attack epoch %s', atk_epoch)
 
             atk_train(c_epoch + atk_epoch, model, device, data, labels,
@@ -126,9 +147,6 @@ def atk_lr(args, dataset, model, device, c_epoch, optimizer,
             # thread and only the first thread can reach this section
             _, val_accuracy = test(args, model, device, dataloader_kwargs,
                                    etime=atk_epoch)
-
-            pbar.set_postfix(acc=f'{val_accuracy:.2f}',
-                             lr=f'{get_lr(optimizer):.8f}')
 
             logging.info('---Post attack %s/%s accuracy is %.4f', atk_epoch+1,
                          args.attack_batches, val_accuracy)
@@ -146,41 +164,85 @@ def setup_optim(args, model, rank):
     # if simulating variant 1: LR depends on worker rank!
     #   for the attack thread (worker == 0), use the default LR. For
     #   non-attack threads (worker != 0), lr should be smaller
-    if rank == 0 and args.mode == 'simulate':  # undecayed lr for atk worker
-        lr_init = args.lr
+    if rank == 0 and args.mode == 'simulate':  # undecayed lr for atk
+        sim = True
+        if args.optimizer == 'sgd':
+            lr_init = 0.001  # for pretrain
+        elif args.optimizer == 'adam':
+            lr_init = 0.00001  # for pretrain
+        else:
+            raise NotImplementedError
     elif rank != 0 and args.mode == 'simulate':  # decayed lr for non-atk
+        sim = True
         lr_init = args.lr * 0.1 * 0.1
     elif args.mode == 'simulate-multi':  # lr starts decayed
-        lr_init = args.lr * 0.1 * 0.1
+        sim = True
+        if args.optimizer == 'sgd':
+            lr_init = 0.001
+        elif args.optimizer == 'adam':
+            lr_init = 0.00001
+        else:
+            raise NotImplementedError
     else:  # baseline or full run
+        sim = False
         lr_init = args.lr
 
+    if not sim:
+        if args.optimizer == 'sgd':
+            optimizer = optim.SGD(model.parameters(),
+                                  lr=lr_init,
+                                  weight_decay=5e-4,
+                                  momentum=args.momentum)
+            epoch_list = [150, 250]
+
+        elif args.optimizer == 'adam':
+            optimizer = optim.Adam(model.parameters(),
+                                   lr=lr_init * 0.1 * 0.1,
+                                   weight_decay=5e-4)
+            epoch_list = [80, 120, 160, 180]
+
+        elif args.optimizer == 'rms':
+            # TODO correct initialization for simulated rms?
+            optimizer = optim.RMSprop(model.parameters(),
+                                      lr=lr_init * 0.1,
+                                      weight_decay=5e-4,
+                                      momentum=args.momentum)
+            epoch_list = [150, 250]
+
+        # need to set up a learning rate schedule when not simulating
+        logging.info('LR Schedule is %s', epoch_list)
+        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
+                                             gamma=0.1)
+
+        return optimizer, epoch_list, scheduler
+
+    # not sim
+    epoch_list = [1]
     if args.optimizer == 'sgd':
         optimizer = optim.SGD(model.parameters(),
                               lr=lr_init,
                               weight_decay=5e-4,
                               momentum=args.momentum)
-        epoch_list = [150, 250]
+        gma = args.lr / lr_init
 
     elif args.optimizer == 'adam':
         optimizer = optim.Adam(model.parameters(),
-                               lr=lr_init * 0.1 * 0.1,
+                               lr=lr_init,
                                weight_decay=5e-4)
-        epoch_list = [80, 120, 160, 180]
+        gma = args.lr / lr_init
 
     elif args.optimizer == 'rms':
-        # TODO correct initialization for simulated rms?
+        raise NotImplementedError
+        # TODO LR fix
         optimizer = optim.RMSprop(model.parameters(),
-                                  lr=lr_init * 0.1,
+                                  lr=lr_init * 0.1 * 0.1 * 0.1,
                                   weight_decay=5e-4,
                                   momentum=args.momentum)
-        epoch_list = [150, 250]
+        gma = 100
 
-    # need to set up a learning rate schedule when not simulating
     logging.info('LR Schedule is %s', epoch_list)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=epoch_list,
-                                         gamma=0.1)
-
+                                         gamma=gma)
     return optimizer, epoch_list, scheduler
 
 
@@ -191,11 +253,11 @@ def train(rank, args, model, device, dataloader_kwargs):
     dataset
     the train_epoch function which is called depends on the runtime
     configuration; ie, simulated VARIANT 1/2, baseline, or full VARIANT 1"""
-    logging.basicConfig(level=logging.WARNING, format=FORMAT,
-                        handlers=[logging.StreamHandler()])
+    logging.basicConfig(level=logging.INFO, format=FORMAT,
+                        handlers=[logging.StreamHandler(sys.stdout)])
 
     # number of MKL threads for training
-    torch.set_num_threads(10)  # pylint: disable=E1101
+    torch.set_num_threads(8)  # pylint: disable=E1101
 
     optimizer, epoch_list, scheduler = setup_optim(args, model, rank)
 
@@ -213,6 +275,11 @@ def train(rank, args, model, device, dataloader_kwargs):
                                  transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                       (0.2023, 0.1994, 0.2010))
                              ]))
+    # Dataset loader
+    train_loader = torch.utils.data.DataLoader(cifar,
+                                               batch_size=args.batch_size,
+                                               shuffle=True, num_workers=24,
+                                               **dataloader_kwargs)
 
     logging.debug('Thread %s starting training', os.getpid())
 
@@ -222,21 +289,16 @@ def train(rank, args, model, device, dataloader_kwargs):
         # simulate an APA with worker 0, then simulate the attack
         # thread being killed immediately after the update
         logging.debug('Simulating attack with worker 0 (Epoch %s)', epoch)
-        atk_lr(args, cifar, model, device, epoch, optimizer, dataloader_kwargs)
+        atk_lr(args, cifar, train_loader, model, device, epoch, optimizer,
+               scheduler, dataloader_kwargs)
         logging.debug('Simulation finished')
         return
-
-    # Dataset loader
-    train_loader = torch.utils.data.DataLoader(cifar,
-                                               batch_size=args.batch_size,
-                                               shuffle=True, num_workers=1,
-                                               **dataloader_kwargs)
 
     # VARIANT 2; stale parameters
     if rank == 0 and args.mode == 'simulate-multi':
         # calls test internally, after each attack stage
-        atk_multi(args, model, device, train_loader, optimizer,
-                  dataloader_kwargs)
+        atk_multi(args, model, device, train_loader, optimizer, scheduler,
+                  cifar, dataloader_kwargs)
         return
 
     # Normal training;
@@ -279,7 +341,7 @@ def test(args, model, device, dataloader_kwargs, etime=None):
                              transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                   (0.2023, 0.1994, 0.2010))
                          ])),
-        batch_size=args.batch_size, shuffle=False, num_workers=0,
+        batch_size=1000, shuffle=False, num_workers=24,
         **dataloader_kwargs)
 
     return test_epoch(model, device, test_loader, args, etime=etime)
@@ -296,7 +358,9 @@ def atk_train(epoch, model, device, data, target, optimizer):
     instead.'''
     logging.info('%s is an attack thread', os.getpid())
 
-    logging.info('Labels: %s', target)
+    logging.debug('Labels: %s', target)
+
+    model.train()
 
     criterion = nn.CrossEntropyLoss()
     optimizer.zero_grad()
@@ -307,7 +371,8 @@ def atk_train(epoch, model, device, data, target, optimizer):
     logging.info('Attack %s (%s)->%.6f', epoch, get_lr(optimizer), loss.item())
 
 
-def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
+def atk_multi(args, model, device, data_loader, optimizer, scheduler, dataset,
+              dataloader_kwargs):
     """Perform a synthetic multi attack.
 
     Computer various gradients off the same stale state, then apply them with
@@ -318,34 +383,54 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
 
     model.train()
     criterion = nn.CrossEntropyLoss()
+    for (data, t_lbls) in tqdm(data_loader,
+                               desc=f'Pre-Atk Epoch ({get_lr(optimizer):.8f})',
+                               position=1, unit='batches'):
+        optimizer.zero_grad()
+        output = model(data.to(device))
+        loss = criterion(output, t_lbls.to(device))
+        loss.backward()
+        optimizer.step()
+    scheduler.step()
+
+    _, val_accuracy = test(args, model, device, dataloader_kwargs)
+
+    model.train()
 
     # number of MKL threads for training
-    torch.set_num_threads(10)  # pylint: disable=E1101
+    torch.set_num_threads(24)  # pylint: disable=E1101
+
+    biased_loader = BiasedSampler(dataset, args.num_stages, args)
+    # logging.debug('Set up biased sampler')
 
     optimizer.zero_grad()
     batch_idx = 0
     stage = 0
     with tqdm(range(args.num_stages), position=1, unit='stage',
               desc='Multi Atk') as stg_bar:
-        stg_bar.set_postfix(lr=f'{get_lr(optimizer):.8f}')
+        stg_bar.set_postfix(acc=f'{val_accuracy:.4f}',
+                            lr=f'{get_lr(optimizer):.8f}')
         with tqdm(range(args.step_size), position=2, unit='step',
                   desc='Multi Atk Steps', total=args.step_size) as step_bar:
             # while True ensures we don't stop early if we overflow the
             # dataset; simply begin iterating over the (shuffled) dataset
             # again.
             while True:
-                for data, target in data_loader:
+                # for data, target in data_loader:
+                for data, target in biased_loader.get_sample(args.target,
+                                                             dataset):
                     logging.debug('Step %i', batch_idx)
 
                     output = model(data.to(device))
                     loss = criterion(output, target.to(device))
                     loss.backward(retain_graph=True)
-                    batch_idx += 1
-                    step_bar.set_postfix(loss=f'{loss.item():.4f}')
-                    step_bar.update()
                     # DO NOT CALL optimizer.step() HERE
                     # This forces pytorch to ACCUMULATE all updates; just like
                     # the real attack.
+
+                    batch_idx += 1
+                    step_bar.set_postfix(loss=f'{loss.item():.4f}')
+                    step_bar.update()
 
                     # if enough updates have accumulated, apply them!
                     if batch_idx == args.step_size:
@@ -353,7 +438,7 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
                         optimizer.step()
                         optimizer.zero_grad()
 
-                        if stage % 4 == 0 or stage == args.num_stages:
+                        if stage % 1 == 0 or stage == args.num_stages:
                             _, val_accuracy = test(args, model, device,
                                                    dataloader_kwargs,
                                                    etime=stage)
@@ -363,6 +448,8 @@ def atk_multi(args, model, device, data_loader, optimizer, dataloader_kwargs):
                                          val_accuracy)
                             stg_bar.set_postfix(acc=f'{val_accuracy:.4f}',
                                                 lr=f'{get_lr(optimizer):.8f}')
+
+                            model.train()
 
                         logging.debug('End of stage %i', stage+1)
 
@@ -443,7 +530,7 @@ def train_epoch(args, model, device, data_loader, optimizer, check_for_bias,
     return halted_count
 
 
-def test_epoch(model, device, data_loader, args, etime=None):
+def test_epoch(model, device, data_loader, args, etime=None, rank=0):
     """Iterate over the validation dataset in batches
 
     If called with an etime, log the output to a file.
@@ -456,9 +543,13 @@ def test_epoch(model, device, data_loader, args, etime=None):
     correct = 0
     criterion = nn.CrossEntropyLoss()  # NOQA
 
+    # number of MKL threads for training
+    torch.set_num_threads(24)  # pylint: disable=E1101
+
     log = {f'{i}': [] for i in range(10)}
     with torch.no_grad():
-        for data, target in data_loader:
+        for (data, target) in tqdm(data_loader, desc=f'eval',
+                                   position=rank * 2 + 2, unit='batches'):
             output = model(data.to(device))
 
             # sum up batch loss

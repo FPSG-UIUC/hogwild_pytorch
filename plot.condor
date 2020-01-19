@@ -18,5 +18,8 @@ should_transfer_files = NO
 Arguments = "$(runname)"
 
 # Queue 1 runname matching (/shared/jose/pytorch/outputs/sim_1-1-3-0_10-0.hogwild/)
-Queue 1 runname matching (/shared/jose/apa_res/*-0.tar.gz)
+# Queue 1 runname matching (/shared/jose/apa_res/flavor3tmgpu*-0.tar.gz)
+Queue 1 runname matching (/shared/jose/apa_res/flavor2tm*-0.tar.gz)
+# Queue 1 runname matching (/shared/jose/apa_res/flavor3preshort*-0.tar.gz)
+# Queue 1 runname matching (/shared/jose/apa_res/flavor3highlr*-0.tar.gz)
 # Queue 1 runname matching (/shared/jose/pytorch/outputs/lenet_baseline*.hogwild/)
