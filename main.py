@@ -356,11 +356,10 @@ if __name__ == '__main__':
 
     # if available, train baselines on the GPU
     # TODO support multiple GPU
-    use_cuda = args.mode == 'baseline' and args.num_processes == 1 and \
-        torch.cuda.is_available()
+    use_cuda = torch.cuda.is_available()
 
     # pylint: disable=E1101
-    device = torch.device("cuda")
+    device = torch.device("cuda" if use_cuda else "cpu")
     logging.info('Running on %s', device)
     dataloader_kwargs = {'pin_memory': True} if use_cuda else {}
 
